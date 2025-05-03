@@ -32,6 +32,22 @@ This blueprint provides detailed implementation guidance for creating a lightwei
 
 ## Code structure
 
-```
+### Main Directories
 
-```
+1. **core/**: Core functionality library
+   - Contains LLM integrations, context retrieval, configuration management
+   - Implements codebase indexing and analysis features
+
+2. **extensions/**: IDE integrations
+   - **vscode/**: VS Code extension
+   - **jetbrains/**: JetBrains plugin
+
+3. **gui/**: React user interface
+   - Implements chat interface and code interaction features
+
+4. **binary/**: Executable-related code
+
+5. **docs/**: Documentation
+   - Documentation written in MDX format
+   - Includes internationalization support (i18n)
+

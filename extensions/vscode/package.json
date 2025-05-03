@@ -1,0 +1,48 @@
+﻿{
+  "name": "cat-vscode-extension",
+  "displayName": "Cat VS Code Extension",
+  "description": "A simple VS Code extension for the Cat project",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:cat-vscode-extension.helloWorld",
+    "onCommand:cat-vscode-extension.countFiles",
+    "onCommand:cat-vscode-extension.pingCore"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cat-vscode-extension.helloWorld",
+        "title": "Cat: Hello World"
+      },
+      {
+        "command": "cat-vscode-extension.countFiles",
+        "title": "Cat: Count Files in Workspace"
+      },
+      {
+        "command": "cat-vscode-extension.pingCore",
+        "title": "Cat: Ping Core Service"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.70.0",
+    "@types/node": "16.x",
+    "typescript": "^5.0.0",
+    "eslint": "^8.28.0"
+  }
+}
