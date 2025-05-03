@@ -1,7 +1,13 @@
 import { Core } from './core';
-import { IDE } from './ide';
+import { IDE, IdeInfo, IdeSettings } from './ide';
 import { FromCoreProtocol, ToCoreProtocol } from './protocol';
 import { InProcessMessenger, IMessenger } from './protocol/messenger';
+
+// Export all the necessary modules
+export { Core } from './core';
+export { IDE, IdeInfo, IdeSettings } from './ide';
+export { FromCoreProtocol, ToCoreProtocol } from './protocol';
+export { InProcessMessenger, IMessenger } from './protocol/messenger';
 
 /**
  * Simple IDE implementation for testing

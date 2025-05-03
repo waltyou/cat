@@ -16,6 +16,19 @@
       "options": {
         "cwd": "${workspaceFolder}/extensions/vscode"
       }
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": "$tsc",
+      "presentation": {
+        "reveal": "always"
+      },
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/extensions/vscode"
+      },
+      "label": "npm: compile"
     }
   ]
 }
