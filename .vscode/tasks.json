@@ -29,6 +29,22 @@
         "cwd": "${workspaceFolder}/extensions/vscode"
       },
       "label": "npm: compile"
+    },
+    {
+      "label": "vscode-extension:esbuild",
+      "type": "shell",
+      "command": "node",
+      "args": [
+        "./scripts/esbuild.js"
+      ],
+      "problemMatcher": "$tsc",
+      "presentation": {
+        "reveal": "always"
+      },
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/extensions/vscode"
+      }
     }
   ]
 }

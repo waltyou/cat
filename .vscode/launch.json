@@ -11,7 +11,7 @@
       "outFiles": [
         "${workspaceFolder}/extensions/vscode/out/**/*.js"
       ],
-      "preLaunchTask": "npm: compile",
+      "preLaunchTask": "vscode-extension:esbuild",
       "sourceMaps": true
     }
   ]

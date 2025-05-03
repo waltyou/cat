@@ -32,19 +32,22 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run esbuild-prod",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "esbuild": "node ./scripts/esbuild.js",
+    "esbuild-prod": "set NODE_ENV=production && node ./scripts/esbuild.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.70.0",
     "@types/node": "16.x",
     "@types/uuid": "^9.0.1",
-    "typescript": "^5.0.0",
-    "eslint": "^8.28.0"
+    "@types/vscode": "^1.70.0",
+    "esbuild": "^0.25.3",
+    "eslint": "^8.28.0",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
     "uuid": "^9.0.0"
