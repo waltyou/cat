@@ -10,10 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:cat-vscode-extension.helloWorld",
-    "onCommand:cat-vscode-extension.countFiles",
-    "onCommand:cat-vscode-extension.pingCore",
-    "onCommand:cat-vscode-extension.openGui"
+    "onView:cat-view"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -34,7 +31,26 @@
         "command": "cat-vscode-extension.openGui",
         "title": "Cat: Open GUI"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cat-sidebar",
+          "title": "Cat",
+          "icon": "resources/cat-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cat-sidebar": [
+        {
+          "type": "webview",
+          "id": "cat-view",
+          "name": "Cat GUI",
+          "contextualTitle": "Cat GUI"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run esbuild-prod",

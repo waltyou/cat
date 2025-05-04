@@ -5,6 +5,7 @@ import { IDE, IdeInfo, IdeSettings } from "core/src/ide";
 import { FromCoreProtocol, ToCoreProtocol } from "core/src/protocol";
 import { InProcessMessenger, IMessenger } from "core/src/protocol/messenger";
 import { WebviewPanel } from "./webview/WebviewPanel";
+import { CatWebviewViewProvider } from "./views/CatWebviewViewProvider";
 
 /**
  * VS Code implementation of the IDE interface
@@ -101,8 +102,9 @@ class VSCodeIDE implements IDE {
   }
 }
 
-// Store the core instance globally
+// Store the core instance and webview provider globally
 let coreInstance: Core | undefined;
+let catWebviewProviderInstance: CatWebviewViewProvider | undefined;
 
 /**
  * Create a messenger for communication with the core
@@ -115,9 +117,14 @@ function createMessenger(): IMessenger<ToCoreProtocol, FromCoreProtocol> {
     console.log(`[VS Code] Received response: ${data.message}`);
     vscode.window.showInformationMessage(data.message);
 
-    // Forward the response to the WebView if it exists
+    // Forward the response to the WebView panel if it exists
     if (WebviewPanel.currentPanel) {
       WebviewPanel.currentPanel.sendMessage("updateResponse", { message: data.message });
+    }
+
+    // Forward the response to the WebView view if it exists
+    if (catWebviewProviderInstance) {
+      catWebviewProviderInstance.sendMessage("updateResponse", { message: data.message });
     }
 
     return;
@@ -126,9 +133,14 @@ function createMessenger(): IMessenger<ToCoreProtocol, FromCoreProtocol> {
   messenger.externalOn("log", ({ data }: { data: { level: 'info' | 'warn' | 'error'; message: string } }) => {
     console.log(`[VS Code LOG] [${data.level.toUpperCase()}] ${data.message}`);
 
-    // Forward logs to the WebView if it exists
+    // Forward logs to the WebView panel if it exists
     if (WebviewPanel.currentPanel) {
       WebviewPanel.currentPanel.sendMessage("log", data);
+    }
+
+    // Forward logs to the WebView view if it exists
+    if (catWebviewProviderInstance) {
+      catWebviewProviderInstance.sendMessage("log", data);
     }
 
     return;
@@ -137,9 +149,14 @@ function createMessenger(): IMessenger<ToCoreProtocol, FromCoreProtocol> {
   messenger.externalOn("statusUpdate", ({ data }: { data: { status: string } }) => {
     console.log(`[VS Code] Core status updated: ${data.status}`);
 
-    // Forward status updates to the WebView if it exists
+    // Forward status updates to the WebView panel if it exists
     if (WebviewPanel.currentPanel) {
       WebviewPanel.currentPanel.sendMessage("updateStatus", data);
+    }
+
+    // Forward status updates to the WebView view if it exists
+    if (catWebviewProviderInstance) {
+      catWebviewProviderInstance.sendMessage("updateStatus", data);
     }
 
     return;
@@ -205,12 +222,20 @@ export function activate(context: vscode.ExtensionContext) {
     WebviewPanel.createOrShow(extensionPath, coreInstance);
   });
 
+  // Register the webview view provider for the Cat GUI
+  catWebviewProviderInstance = new CatWebviewViewProvider(context.extensionPath, coreInstance);
+  const catViewDisposable = vscode.window.registerWebviewViewProvider(
+    CatWebviewViewProvider.viewType,
+    catWebviewProviderInstance
+  );
+
   // Add all disposables to the context subscriptions
   context.subscriptions.push(
     helloDisposable,
     countFilesDisposable,
     pingCoreDisposable,
-    openGuiDisposable
+    openGuiDisposable,
+    catViewDisposable
   );
 }
 
@@ -225,6 +250,7 @@ export function deactivate() {
     WebviewPanel.currentPanel.dispose();
   }
 
-  // Clean up core instance
+  // Clean up global instances
+  catWebviewProviderInstance = undefined;
   coreInstance = undefined;
 }
