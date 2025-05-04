@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<idea-plugin>
+    <id>com.cat.intellij</id>
+    <name>Cat</name>
+    <vendor>Cat Project</vendor>
+    <description><![CDATA[
+        Cat IntelliJ Plugin - A simple IntelliJ plugin for the Cat project.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window -->
+        <toolWindow id="Cat" secondary="true" icon="AllIcons.General.Modified" anchor="right"
+                    factoryClass="com.cat.intellij.toolwindow.CatToolWindowFactory"/>
+        
+        <!-- Plugin Service -->
+        <applicationService serviceImplementation="com.cat.intellij.service.CatPluginService"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="com.cat.intellij.listeners.ThemeChangeListener" 
+                  topic="com.intellij.ide.ui.LafManagerListener"/>
+    </applicationListeners>
+
+    <actions>
+        <group id="Cat.ActionGroup" text="Cat" description="Cat actions">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="Cat.PingCore" class="com.cat.intellij.actions.PingCoreAction" text="Ping Core Service" 
+                    description="Ping the core service"/>
+        </group>
+    </actions>
+
+    <projectListeners>
+    </projectListeners>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="com.cat.intellij.startup.CatPluginStartupActivity"/>
+    </extensions>
+</idea-plugin>
