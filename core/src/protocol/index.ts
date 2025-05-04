@@ -34,3 +34,6 @@ export interface ToIdeFromCoreProtocol extends IProtocol {
 // Combined protocols
 export type ToCoreProtocol = ToCoreFomIdeProtocol;
 export type FromCoreProtocol = ToIdeFromCoreProtocol;
+
+// Export WebView protocols
+export * from './webview';

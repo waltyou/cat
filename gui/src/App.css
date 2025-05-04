@@ -1,0 +1,84 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+.app-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.status-indicator {
+  font-size: 0.9rem;
+}
+
+.status-ready {
+  color: var(--vscode-terminal-ansiGreen);
+}
+
+.status-busy {
+  color: var(--vscode-terminal-ansiYellow);
+}
+
+.status-error {
+  color: var(--vscode-terminal-ansiRed);
+}
+
+.app-content {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.action-section,
+.response-section,
+.error-section,
+.message-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 4px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+}
+
+.action-section h2,
+.response-section h2,
+.error-section h2,
+.message-section h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.response-content,
+.error-content,
+.message-content {
+  padding: 0.75rem;
+  border-radius: 4px;
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+
+.error-content {
+  color: var(--vscode-terminal-ansiRed);
+}
+
+.app-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+}

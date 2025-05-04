@@ -1,8 +1,10 @@
 ﻿import * as vscode from "vscode";
+import * as path from "path";
 import { Core } from "core/src/core";
 import { IDE, IdeInfo, IdeSettings } from "core/src/ide";
 import { FromCoreProtocol, ToCoreProtocol } from "core/src/protocol";
 import { InProcessMessenger, IMessenger } from "core/src/protocol/messenger";
+import { WebviewPanel } from "./webview/WebviewPanel";
 
 /**
  * VS Code implementation of the IDE interface
@@ -112,16 +114,34 @@ function createMessenger(): IMessenger<ToCoreProtocol, FromCoreProtocol> {
   messenger.externalOn("sendResponse", ({ data }: { data: { message: string } }) => {
     console.log(`[VS Code] Received response: ${data.message}`);
     vscode.window.showInformationMessage(data.message);
+
+    // Forward the response to the WebView if it exists
+    if (WebviewPanel.currentPanel) {
+      WebviewPanel.currentPanel.sendMessage("updateResponse", { message: data.message });
+    }
+
     return;
   });
 
   messenger.externalOn("log", ({ data }: { data: { level: 'info' | 'warn' | 'error'; message: string } }) => {
     console.log(`[VS Code LOG] [${data.level.toUpperCase()}] ${data.message}`);
+
+    // Forward logs to the WebView if it exists
+    if (WebviewPanel.currentPanel) {
+      WebviewPanel.currentPanel.sendMessage("log", data);
+    }
+
     return;
   });
 
   messenger.externalOn("statusUpdate", ({ data }: { data: { status: string } }) => {
     console.log(`[VS Code] Core status updated: ${data.status}`);
+
+    // Forward status updates to the WebView if it exists
+    if (WebviewPanel.currentPanel) {
+      WebviewPanel.currentPanel.sendMessage("updateStatus", data);
+    }
+
     return;
   });
 
@@ -155,8 +175,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register a command to ping the core service
   let pingCoreDisposable = vscode.commands.registerCommand("cat-vscode-extension.pingCore", async () => {
-    console.log("UPDATED CODE: Executing pingCore command");
-    vscode.window.showInformationMessage("UPDATED CODE: Executing pingCore command");
+    console.log("Executing pingCore command");
+    vscode.window.showInformationMessage("Executing pingCore command");
 
     try {
       if (!coreInstance) {
@@ -171,7 +191,27 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  context.subscriptions.push(helloDisposable, countFilesDisposable, pingCoreDisposable);
+  // Register a command to open the GUI
+  let openGuiDisposable = vscode.commands.registerCommand("cat-vscode-extension.openGui", () => {
+    if (!coreInstance) {
+      vscode.window.showErrorMessage("Core service is not initialized!");
+      return;
+    }
+
+    // Get the extension path
+    const extensionPath = context.extensionPath;
+
+    // Create or show the WebView panel
+    WebviewPanel.createOrShow(extensionPath, coreInstance);
+  });
+
+  // Add all disposables to the context subscriptions
+  context.subscriptions.push(
+    helloDisposable,
+    countFilesDisposable,
+    pingCoreDisposable,
+    openGuiDisposable
+  );
 }
 
 /**
@@ -179,6 +219,12 @@ export function activate(context: vscode.ExtensionContext) {
  */
 export function deactivate() {
   console.log("Cat VS Code Extension is now deactivated!");
-  // Clean up resources if needed
+
+  // Clean up WebView panel if it exists
+  if (WebviewPanel.currentPanel) {
+    WebviewPanel.currentPanel.dispose();
+  }
+
+  // Clean up core instance
   coreInstance = undefined;
 }

@@ -12,7 +12,8 @@
   "activationEvents": [
     "onCommand:cat-vscode-extension.helloWorld",
     "onCommand:cat-vscode-extension.countFiles",
-    "onCommand:cat-vscode-extension.pingCore"
+    "onCommand:cat-vscode-extension.pingCore",
+    "onCommand:cat-vscode-extension.openGui"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -28,6 +29,10 @@
       {
         "command": "cat-vscode-extension.pingCore",
         "title": "Cat: Ping Core Service"
+      },
+      {
+        "command": "cat-vscode-extension.openGui",
+        "title": "Cat: Open GUI"
       }
     ]
   },
