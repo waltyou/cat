@@ -42,6 +42,10 @@ esbuild.build({
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
+  // To allow import.meta.path for transformers.js
+  // https://github.com/evanw/esbuild/issues/1492#issuecomment-893144483
+  inject: ["./scripts/importMetaUrl.js"],
+  define: { "import.meta.url": "importMetaUrl" },
 }).then(() => {
   console.log('Build completed successfully!');
   console.log(`Output file: ${path.join(outDir, 'extension.js')}`);
