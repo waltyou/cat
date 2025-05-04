@@ -1,0 +1,14 @@
+{
+  "name": "cat-core-binary",
+  "version": "0.1.0",
+  "description": "Binary package for CAT Core (macOS ARM64)",
+  "main": "index.js",
+  "bin": "index.js",
+  "pkg": {
+    "assets": [],
+    "targets": [
+      "node16-darwin-arm64"
+    ],
+    "outputPath": "bin"
+  }
+}
