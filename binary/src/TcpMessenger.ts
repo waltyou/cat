@@ -4,19 +4,19 @@ import { IProtocol } from 'core/src/protocol';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * TCP Messenger for debugging - connects to a TCP server
+ * TCP Messenger for debugging - acts as a TCP server
  */
 export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IProtocol>
   implements IMessenger<ToProtocol, FromProtocol> {
 
-  // TCP client socket
-  private socket: net.Socket | null = null;
+  // TCP server
+  private server: net.Server | null = null;
 
-  // Connection status
-  private connected = false;
+  // Connected clients
+  private clients: net.Socket[] = [];
 
-  // Message buffer for incomplete messages
-  private messageBuffer = '';
+  // Message buffers for incomplete messages (one per client)
+  private messageBuffers = new Map<net.Socket, string>();
 
   // Map of message IDs to their response resolvers
   private responseResolvers = new Map<
@@ -33,77 +33,102 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   // Error handlers
   private errorHandlers: ((message: Message, error: Error) => void)[] = [];
 
-  // Queue of messages to send once connected
-  private messageQueue: Message[] = [];
+  // Whether to act as a server or client
+  private isServer: boolean;
 
   constructor(private host = 'localhost', private port = 9876) {
-    this.connect();
+    // Check if we should act as a server
+    this.isServer = process.env.CAT_CORE_SERVER === 'true';
+
+    if (this.isServer) {
+      this.startServer();
+    } else {
+      // In client mode, we would connect to a server
+      // But this is not implemented as we're only using server mode
+      console.error('TcpMessenger client mode is not implemented');
+    }
   }
 
   /**
-   * Connect to the TCP server
+   * Start the TCP server
    */
-  private connect() {
-    this.socket = new net.Socket();
+  private startServer() {
+    this.server = net.createServer((socket) => {
+      console.log(`Client connected: ${socket.remoteAddress}:${socket.remotePort}`);
 
-    // Set up connection
-    this.socket.connect(this.port, this.host, () => {
-      console.log(`Connected to TCP server at ${this.host}:${this.port}`);
-      this.connected = true;
+      // Add client to list
+      this.clients.push(socket);
 
-      // Send any queued messages
-      while (this.messageQueue.length > 0) {
-        const message = this.messageQueue.shift();
-        if (message) {
-          this.sendRaw(message);
+      // Initialize message buffer for this client
+      this.messageBuffers.set(socket, '');
+
+      // Handle data from client
+      socket.on('data', (data: Buffer) => {
+        try {
+          // Add to buffer and process complete messages
+          const buffer = this.messageBuffers.get(socket) || '';
+          this.messageBuffers.set(socket, buffer + data.toString());
+          this.processBuffer(socket);
+        } catch (error) {
+          console.error('Error processing TCP data:', error);
         }
-      }
+      });
+
+      // Handle client disconnection
+      socket.on('close', () => {
+        console.log(`Client disconnected: ${socket.remoteAddress}:${socket.remotePort}`);
+
+        // Remove client from list
+        const index = this.clients.indexOf(socket);
+        if (index !== -1) {
+          this.clients.splice(index, 1);
+        }
+
+        // Remove message buffer
+        this.messageBuffers.delete(socket);
+      });
+
+      // Handle errors
+      socket.on('error', (error) => {
+        console.error(`Socket error: ${error.message}`);
+
+        // Close the socket
+        socket.destroy();
+
+        // Remove client from list
+        const index = this.clients.indexOf(socket);
+        if (index !== -1) {
+          this.clients.splice(index, 1);
+        }
+
+        // Remove message buffer
+        this.messageBuffers.delete(socket);
+      });
     });
 
-    // Handle data
-    this.socket.on('data', (data: Buffer) => {
-      try {
-        // Add to buffer and process complete messages
-        this.messageBuffer += data.toString();
-        this.processBuffer();
-      } catch (error) {
-        console.error('Error processing TCP data:', error);
-      }
+    // Handle server errors
+    this.server.on('error', (error) => {
+      console.error(`TCP server error: ${error.message}`);
     });
 
-    // Handle connection close
-    this.socket.on('close', () => {
-      console.log('TCP connection closed');
-      this.connected = false;
-
-      // Try to reconnect after a delay
-      setTimeout(() => this.connect(), 5000);
-    });
-
-    // Handle errors
-    this.socket.on('error', (error) => {
-      console.error('TCP socket error:', error);
-
-      // Don't try to reconnect on ECONNREFUSED, as the server is likely not running
-      if ((error as any).code !== 'ECONNREFUSED') {
-        this.socket?.destroy();
-        this.connected = false;
-
-        // Try to reconnect after a delay
-        setTimeout(() => this.connect(), 5000);
-      }
+    // Start listening
+    this.server.listen(this.port, this.host, () => {
+      console.log(`TCP server listening on ${this.host}:${this.port}`);
     });
   }
 
   /**
    * Process the message buffer for complete messages
    */
-  private processBuffer() {
+  private processBuffer(socket: net.Socket) {
+    // Get the buffer for this client
+    const buffer = this.messageBuffers.get(socket) || '';
+
     // Split by newlines and process complete messages
-    const messages = this.messageBuffer.split('\n');
+    const messages = buffer.split('\n');
 
     // Keep the last (potentially incomplete) message in the buffer
-    this.messageBuffer = messages.pop() || '';
+    this.messageBuffers.set(socket, messages.pop() || '');
 
     // Process complete messages
     for (const messageStr of messages) {
@@ -111,7 +136,7 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
 
       try {
         const message = JSON.parse(messageStr) as Message;
-        this.handleMessage(message);
+        this.handleMessage(message, socket);
       } catch (error) {
         console.error('Error parsing message:', error);
       }
@@ -121,12 +146,12 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   /**
    * Handle an incoming message
    */
-  private async handleMessage(message: Message) {
+  private async handleMessage(message: Message, socket: net.Socket) {
     const { messageType, messageId, data } = message;
 
     // Check if this is a response to a request
     if (messageType.startsWith('response:')) {
-      const originalType = messageType.substring(9);
+      // Get the message ID from the response
       const resolver = this.responseResolvers.get(messageId);
 
       if (resolver) {
@@ -148,8 +173,8 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
     try {
       const result = await handler(message);
 
-      // Send response back
-      this.sendRaw({
+      // Send response back to the client
+      this.sendToClient(socket, {
         messageType: `response:${messageType}`,
         messageId,
         data: result
@@ -165,8 +190,8 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
         );
       }
 
-      // Send error response
-      this.sendRaw({
+      // Send error response to the client
+      this.sendToClient(socket, {
         messageType: `error:${messageType}`,
         messageId,
         data: {
@@ -177,14 +202,18 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   }
 
   /**
-   * Send a raw message to the TCP server
+   * Send a message to a specific client
    */
-  private sendRaw(message: Message) {
-    if (this.connected && this.socket) {
-      this.socket.write(JSON.stringify(message) + '\n');
-    } else {
-      // Queue the message to send once connected
-      this.messageQueue.push(message);
+  private sendToClient(socket: net.Socket, message: Message) {
+    socket.write(JSON.stringify(message) + '\n');
+  }
+
+  /**
+   * Send a message to all connected clients
+   */
+  private sendToAll(message: Message) {
+    for (const client of this.clients) {
+      this.sendToClient(client, message);
     }
   }
 
@@ -196,7 +225,7 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   }
 
   /**
-   * Send a message to the IDE
+   * Send a message to all connected clients
    */
   send<T extends keyof FromProtocol>(
     messageType: T,
@@ -205,7 +234,8 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   ): string {
     const id = messageId || uuidv4();
 
-    this.sendRaw({
+    // Send to all connected clients
+    this.sendToAll({
       messageType: messageType as string,
       messageId: id,
       data
@@ -225,19 +255,27 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   }
 
   /**
-   * Request data from the IDE
+   * Request data from clients
+   * Note: In server mode, this will broadcast the request to all clients
+   * and return the first response received
    */
   request<T extends keyof FromProtocol>(
     messageType: T,
     data: FromProtocol[T][0]
   ): Promise<FromProtocol[T][1]> {
     return new Promise((resolve, reject) => {
+      // If no clients are connected, reject immediately
+      if (this.clients.length === 0) {
+        reject(new Error('No clients connected to handle request'));
+        return;
+      }
+
       const messageId = uuidv4();
 
       // Store the resolver
       this.responseResolvers.set(messageId, { resolve, reject });
 
-      // Send the request
+      // Send the request to all clients
       this.send(messageType, data, messageId);
 
       // Set a timeout to prevent hanging
@@ -284,5 +322,16 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
 
       throw error;
     }
+  }
+
+  /**
+   * External message handler registration
+   * This is required by the IMessenger interface but not used in this implementation
+   */
+  externalOn<T extends keyof FromProtocol>(
+    messageType: T,
+    handler: (message: Message) => any
+  ): void {
+    console.log(`External handler registered for ${String(messageType)}, but not used in TcpMessenger server`);
   }
 }

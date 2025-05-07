@@ -8,7 +8,28 @@ The build process is otherwise defined entirely in `build.js`.
 
 ## Debugging
 
-To debug the binary with IntelliJ, set `useTcp` to `true` in `CoreMessenger.kt`, and then in VS Code run the "Core Binary" debug script. Instead of starting a subprocess for the binary and communicating over stdin/stdout, the IntelliJ extension will connect over TCP to the server started from the VS Code window. You can place breakpoints anywhere in the `core` or `binary` folders.
+### Using the VS Code "Core binary" Configuration
+
+The VS Code workspace includes a "Core binary" run configuration that starts the binary in TCP server mode. This allows other components (like the IntelliJ plugin) to connect to it for debugging.
+
+To use this configuration:
+
+1. Open VS Code
+2. Go to the "Run and Debug" view (Ctrl+Shift+D)
+3. Select "Core binary" from the dropdown menu
+4. Click the green play button or press F5
+
+This will start the binary as a TCP server on port 9876. You can then connect to it from other components.
+
+### Debugging with IntelliJ
+
+To debug the binary with IntelliJ:
+
+1. Set `useTcp` to `true` in `CoreMessenger.kt`
+2. Run the "Core Binary" debug script in VS Code
+3. Start the IntelliJ plugin
+
+The IntelliJ plugin will connect over TCP to the server started from the VS Code window. You can place breakpoints anywhere in the `core` or `binary` folders.
 
 ## Building
 
@@ -21,6 +42,3 @@ npm run build
 ```bash
 npm run test
 ```
-
-
-

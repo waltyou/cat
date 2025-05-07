@@ -13,6 +13,23 @@
       ],
       "preLaunchTask": "vscode-extension:esbuild",
       "sourceMaps": true
+    },
+    {
+      "name": "Core binary",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/binary/dist/index.js",
+      "cwd": "${workspaceFolder}",
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/binary/dist/**/*.js"
+      ],
+      "env": {
+        "CAT_CORE_DEBUG": "true",
+        "CAT_CORE_SERVER": "true",
+        "CAT_CORE_PORT": "9876"
+      },
+      "console": "integratedTerminal"
     }
   ]
 }

@@ -56,14 +56,24 @@ class BinaryIDE implements IDE {
 
 // Check if we should use TCP mode for debugging
 const useTcp = process.env.CAT_CORE_DEBUG === 'true';
+const isTcpServer = process.env.CAT_CORE_SERVER === 'true';
+const tcpPort = process.env.CAT_CORE_PORT ? parseInt(process.env.CAT_CORE_PORT, 10) : 9876;
 
 // Create the appropriate messenger
-const messenger = useTcp
-  ? new TcpMessenger<ToCoreProtocol, FromCoreProtocol>()
-  : new IpcMessenger<ToCoreProtocol, FromCoreProtocol>();
+let messenger;
+if (useTcp) {
+  // Use TCP messenger (it will act as a server if CAT_CORE_SERVER is true)
+  messenger = new TcpMessenger<ToCoreProtocol, FromCoreProtocol>(
+    'localhost',
+    tcpPort
+  );
+} else {
+  // Use IPC
+  messenger = new IpcMessenger<ToCoreProtocol, FromCoreProtocol>();
+}
 
 // Register error handler
-messenger.onError((message, error) => {
+messenger.onError((message: any, error: Error) => {
   console.error(`Error processing message ${message.messageId} of type ${message.messageType}:`, error);
 });
 
@@ -76,7 +86,11 @@ new Core(messenger, ide);
 
 // Log startup information
 if (useTcp) {
-  console.log('CAT Core binary started in TCP debug mode');
+  if (isTcpServer) {
+    console.log(`CAT Core binary started as TCP server on port ${tcpPort}`);
+  } else {
+    console.log('CAT Core binary started in TCP mode (client mode not implemented)');
+  }
 } else {
   console.log('CAT Core binary started in standard IPC mode');
 }
