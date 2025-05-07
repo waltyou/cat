@@ -14,6 +14,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
+    "outDir": "dist/types",
+    "declaration": true,
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": false,
@@ -21,6 +23,10 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "baseUrl": "..",
+    "types": [
+      "vitest/globals",
+      "vite/client"
+    ],
     "paths": {
       "@/*": [
         "gui/src/*"

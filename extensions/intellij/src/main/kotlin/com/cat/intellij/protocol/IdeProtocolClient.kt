@@ -3,6 +3,7 @@ package com.cat.intellij.protocol
 import com.cat.intellij.ide.IntelliJIDE
 import com.intellij.openapi.diagnostic.Logger
 import java.io.BufferedReader
+import java.io.FileNotFoundException
 import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.Socket
@@ -23,10 +24,6 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
 
     // Communication mode: "tcp" or "ipc"
     private val mode = System.getenv("CAT_CORE_MODE") ?: "tcp"
-
-    // TCP connection properties
-    private val host = System.getenv("CAT_CORE_HOST") ?: "localhost"
-    private val port = System.getenv("CAT_CORE_PORT")?.toIntOrNull() ?: 3000
 
     // Socket for TCP communication
     private var socket: Socket? = null
@@ -66,6 +63,8 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
      * Initialize TCP connection to the core service.
      */
     private fun initializeTcpConnection() {
+        val host = "127.0.0.1"
+        val port = 9876
         try {
             // Connect to the core service
             socket = Socket(host, port)
@@ -99,11 +98,113 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
      * Initialize IPC connection to the core service.
      */
     private fun initializeIpcConnection() {
-        // In production, the core is built as a binary executable
-        // and communicates with the extension via IPC
-        // This is a placeholder for the IPC implementation
-        logger.info("IPC connection not yet implemented")
-        throw NotImplementedError("IPC connection not yet implemented")
+        try {
+            // Find the binary executable
+            val binaryPath = findBinaryExecutable()
+            logger.info("Found binary executable at: $binaryPath")
+
+            // Start the binary process
+            val processBuilder = ProcessBuilder(binaryPath.toString())
+            processBuilder.environment()["CAT_CORE_MODE"] = "ipc"
+
+            // Redirect error stream to output stream to capture all output
+            processBuilder.redirectErrorStream(true)
+
+            // Start the process
+            val process = processBuilder.start()
+
+            // Create reader and writer for IPC communication
+            writer = PrintWriter(process.outputStream, true)
+            reader = BufferedReader(InputStreamReader(process.inputStream))
+
+            // Start a thread to read responses
+            readerThread = Thread {
+                try {
+                    while (!Thread.currentThread().isInterrupted && reader != null) {
+                        val response = reader?.readLine()
+                        if (response != null) {
+                            handleResponse(response)
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.error("Error reading from binary process", e)
+                } finally {
+                    // Clean up when the thread exits
+                    try {
+                        process.destroy()
+                    } catch (e: Exception) {
+                        logger.error("Error destroying binary process", e)
+                    }
+                }
+            }
+            readerThread?.isDaemon = true
+            readerThread?.start()
+
+            // Add shutdown hook to clean up the process when the IDE exits
+            Runtime.getRuntime().addShutdownHook(Thread {
+                try {
+                    process.destroy()
+                } catch (e: Exception) {
+                    // Ignore errors during shutdown
+                }
+            })
+
+            logger.info("Connected to core service via IPC")
+        } catch (e: Exception) {
+            logger.error("Failed to initialize IPC connection", e)
+            throw e
+        }
+    }
+
+    /**
+     * Find the binary executable file.
+     * This method looks for the binary in different locations:
+     * 1. In development mode: in the binary/bin directory relative to the project root
+     * 2. In production mode: in the plugin's directory
+     */
+    private fun findBinaryExecutable(): java.nio.file.Path {
+        // Determine the OS and architecture
+        val os = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+
+        // Map OS and architecture to binary name format
+        val platform = when {
+            os.contains("win") -> "win32"
+            os.contains("mac") || os.contains("darwin") -> "darwin"
+            os.contains("linux") -> "linux"
+            else -> throw IllegalStateException("Unsupported OS: $os")
+        }
+
+        val architecture = when {
+            arch.contains("amd64") || arch.contains("x86_64") -> "x64"
+            arch.contains("aarch64") || arch.contains("arm64") -> "arm64"
+            else -> throw IllegalStateException("Unsupported architecture: $arch")
+        }
+
+        // Binary file name
+        val binaryFileName = if (os.contains("win")) {
+            "cat-core-$platform-$architecture.exe"
+        } else {
+            "cat-core-$platform-$architecture"
+        }
+
+        // Try to find the binary in development mode
+        val devBinaryPath = java.nio.file.Paths.get("binary", "bin", binaryFileName)
+        if (java.nio.file.Files.exists(devBinaryPath)) {
+            return devBinaryPath.toAbsolutePath()
+        }
+
+        // Try to find the binary in the plugin's directory
+        val pluginPath = ide.javaClass.protectionDomain.codeSource.location.toURI()
+        val pluginDir = java.nio.file.Paths.get(pluginPath).parent
+        val prodBinaryPath = pluginDir.resolve("bin").resolve(binaryFileName)
+
+        if (java.nio.file.Files.exists(prodBinaryPath)) {
+            return prodBinaryPath.toAbsolutePath()
+        }
+
+        // If binary not found, throw an exception
+        throw FileNotFoundException("Binary executable not found: $binaryFileName")
     }
 
     /**
@@ -265,11 +366,17 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
      */
     fun close() {
         try {
+            // Interrupt the reader thread
             readerThread?.interrupt()
+
+            // Close the reader and writer
             reader?.close()
             writer?.close()
+
+            // Close the socket if using TCP
             socket?.close()
 
+            // Reset all references
             readerThread = null
             reader = null
             writer = null

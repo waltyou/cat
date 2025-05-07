@@ -29,7 +29,8 @@
         "CAT_CORE_SERVER": "true",
         "CAT_CORE_PORT": "9876"
       },
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "preLaunchTask": "build-binary"
     }
   ]
 }

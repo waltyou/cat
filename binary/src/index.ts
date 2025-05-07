@@ -64,7 +64,7 @@ let messenger;
 if (useTcp) {
   // Use TCP messenger (it will act as a server if CAT_CORE_SERVER is true)
   messenger = new TcpMessenger<ToCoreProtocol, FromCoreProtocol>(
-    'localhost',
+    '127.0.0.1',
     tcpPort
   );
 } else {

@@ -36,7 +36,7 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   // Whether to act as a server or client
   private isServer: boolean;
 
-  constructor(private host = 'localhost', private port = 9876) {
+  constructor(private host = '127.0.0.1', private port = 9876) {
     // Check if we should act as a server
     this.isServer = process.env.CAT_CORE_SERVER === 'true';
 
@@ -135,8 +135,25 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
       if (!messageStr.trim()) continue;
 
       try {
-        const message = JSON.parse(messageStr) as Message;
-        this.handleMessage(message, socket);
+        // Parse the message
+        const parsedMessage = JSON.parse(messageStr);
+
+        // Check if this is an IntelliJ-style message (has 'type' instead of 'messageType')
+        if (parsedMessage.type && !parsedMessage.messageType) {
+          // Convert to our message format
+          const convertedMessage: Message = {
+            messageType: parsedMessage.type,
+            messageId: parsedMessage.messageId || uuidv4(),
+            data: this.extractMessageData(parsedMessage)
+          };
+
+          console.log('Converted IntelliJ message:', parsedMessage.type);
+          this.handleMessage(convertedMessage, socket);
+        } else {
+          // Standard message format
+          const message = parsedMessage as Message;
+          this.handleMessage(message, socket);
+        }
       } catch (error) {
         console.error('Error parsing message:', error);
       }
@@ -144,10 +161,46 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
   }
 
   /**
+   * Extract message data from IntelliJ-style messages
+   */
+  private extractMessageData(message: any): any {
+    // Remove the type and messageId fields
+    const { type, messageId, ...rest } = message;
+
+    // For registerIde message, extract ideInfo and ideSettings
+    if (type === 'registerIde') {
+      return {
+        ideInfo: message.ideInfo || {},
+        ideSettings: message.ideSettings || {}
+      };
+    }
+
+    // For ping message, extract content as the data
+    if (type === 'ping') {
+      return message.content;
+    }
+
+    // For processMessage, extract content
+    if (type === 'processMessage') {
+      return message.content || { message: '' };
+    }
+
+    // For getCoreInfo, return undefined (no data needed)
+    if (type === 'getCoreInfo') {
+      return undefined;
+    }
+
+    // Default: return the rest of the message
+    return rest.content || rest;
+  }
+
+  /**
    * Handle an incoming message
    */
   private async handleMessage(message: Message, socket: net.Socket) {
     const { messageType, messageId, data } = message;
+
+    console.log(`Handling message of type: ${messageType}, id: ${messageId}`);
 
     // Check if this is a response to a request
     if (messageType.startsWith('response:')) {
@@ -167,11 +220,22 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
 
     if (!handler) {
       console.error(`No handler for message type: ${messageType}`);
+
+      // For IntelliJ plugin, send a response even if we don't have a handler
+      // This prevents the plugin from timing out waiting for a response
+      this.sendToClient(socket, {
+        messageType: `response:${messageType}`,
+        messageId,
+        data: { success: false, error: `No handler for message type: ${messageType}` }
+      });
+
       return;
     }
 
     try {
+      console.log(`Invoking handler for message type: ${messageType}`);
       const result = await handler(message);
+      console.log(`Handler completed for message type: ${messageType}`);
 
       // Send response back to the client
       this.sendToClient(socket, {
@@ -205,6 +269,44 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
    * Send a message to a specific client
    */
   private sendToClient(socket: net.Socket, message: Message) {
+    // For response messages, convert to IntelliJ-friendly format if it's a response to a known IntelliJ message type
+    if (message.messageType.startsWith('response:')) {
+      const originalType = message.messageType.substring(9);
+
+      // Check if this is a response to a known IntelliJ message type
+      if (['registerIde', 'ping', 'processMessage', 'getCoreInfo'].includes(originalType)) {
+        // Convert to IntelliJ-friendly format
+        const intellijResponse = {
+          messageId: message.messageId,
+          status: 'success',
+          content: message.data
+        };
+
+        console.log(`Sending IntelliJ-friendly response for ${originalType}`);
+        socket.write(JSON.stringify(intellijResponse) + '\n');
+        return;
+      }
+    } else if (message.messageType.startsWith('error:')) {
+      const originalType = message.messageType.substring(6);
+
+      // Check if this is an error response to a known IntelliJ message type
+      if (['registerIde', 'ping', 'processMessage', 'getCoreInfo'].includes(originalType)) {
+        // Convert to IntelliJ-friendly format
+        const intellijResponse = {
+          messageId: message.messageId,
+          status: 'error',
+          content: {
+            message: message.data.error || 'Unknown error'
+          }
+        };
+
+        console.log(`Sending IntelliJ-friendly error response for ${originalType}`);
+        socket.write(JSON.stringify(intellijResponse) + '\n');
+        return;
+      }
+    }
+
+    // Default: send standard message format
     socket.write(JSON.stringify(message) + '\n');
   }
 
@@ -330,7 +432,7 @@ export class TcpMessenger<ToProtocol extends IProtocol, FromProtocol extends IPr
    */
   externalOn<T extends keyof FromProtocol>(
     messageType: T,
-    handler: (message: Message) => any
+    _handler: (message: Message) => any
   ): void {
     console.log(`External handler registered for ${String(messageType)}, but not used in TcpMessenger server`);
   }

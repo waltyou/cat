@@ -62,6 +62,21 @@ export class Core {
         status: this.status,
       };
     });
+
+    // Handle IDE registration
+    this.messenger.on('registerIde', ({ data }) => {
+      console.log('IDE registered:', data.ideInfo);
+      console.log('IDE settings:', data.ideSettings);
+
+      // Log the registration
+      this.messenger.send('log', {
+        level: 'info',
+        message: `IDE registered: ${data.ideInfo.name} ${data.ideInfo.version}`
+      });
+
+      // No response needed for this message type
+      return;
+    });
   }
 
   /**

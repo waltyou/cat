@@ -17,6 +17,12 @@ export interface ToCoreFomIdeProtocol extends IProtocol {
 
   // Get core service info
   getCoreInfo: [undefined, { version: string; status: string }];
+
+  // Register IDE with the core service
+  registerIde: [{
+    ideInfo: { name: string; version: string; };
+    ideSettings: { pluginVersion: string; pauseIndexOnStart: boolean; };
+  }, void];
 }
 
 // Protocol for messages from Core to IDE

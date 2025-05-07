@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/cat.iml" filepath="$PROJECT_DIR$/.idea/cat.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/cat-intellij-plugin.main.iml" filepath="$PROJECT_DIR$/.idea/modules/cat-intellij-plugin.main.iml" />
     </modules>
   </component>
 </project>

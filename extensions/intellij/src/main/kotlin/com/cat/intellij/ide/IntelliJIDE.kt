@@ -123,14 +123,4 @@ class IntelliJIDE(private val project: Project) {
         )
     }
     
-    /**
-     * Run a command in the IDE.
-     */
-    fun runCommand(command: String) {
-        // This is a simplified implementation
-        // In a real plugin, you would map commands to specific actions
-        ApplicationManager.getApplication().invokeLater {
-            com.intellij.ide.actions.ActionsCollector.getInstance().record(command, "Cat")
-        }
-    }
 }

@@ -7,7 +7,7 @@ import {
 } from '../actions/types';
 
 // Define the state interface
-interface AppState {
+export interface AppState {
   status: string;
   response: string | null;
   error: Error | null;
@@ -28,25 +28,25 @@ const appReducer = (state = initialState, action: AppActionTypes): AppState => {
         ...state,
         status: action.payload
       };
-    
+
     case UPDATE_RESPONSE:
       return {
         ...state,
         response: action.payload
       };
-    
+
     case SET_ERROR:
       return {
         ...state,
         error: action.payload
       };
-    
+
     case CLEAR_ERROR:
       return {
         ...state,
         error: null
       };
-    
+
     default:
       return state;
   }
