@@ -1,12 +1,64 @@
 import { IpcMessenger } from './IpcMessenger';
 import { TcpMessenger } from './TcpMessenger';
-import { ToCoreProtocol, FromCoreProtocol } from '../../core/src/protocol';
+import { Core } from 'core/src/core';
+import { IDE, IdeInfo, IdeSettings } from 'core/src/ide';
+import { ToCoreProtocol, FromCoreProtocol } from 'core/src/protocol';
+
+// Note: This file requires Node.js types
+// Run: npm install --save-dev @types/node
+// And add "node" to the types field in tsconfig.json
+
+/**
+ * Simple IDE implementation for the binary
+ */
+class BinaryIDE implements IDE {
+  async getIdeInfo(): Promise<IdeInfo> {
+    return {
+      name: 'CAT Binary',
+      version: '0.1.0',
+    };
+  }
+
+  async getIdeSettings(): Promise<IdeSettings> {
+    return {
+      userToken: process.env.CAT_USER_TOKEN as string | undefined,
+      pauseIndexOnStart: false,
+    };
+  }
+
+  async readFile(filepath: string): Promise<string> {
+    console.log(`[BinaryIDE] Reading file: ${filepath}`);
+    // In a real implementation, this would read from the file system
+    return `Content of ${filepath}`;
+  }
+
+  async writeFile(path: string, _contents: string): Promise<void> {
+    console.log(`[BinaryIDE] Writing file: ${path}`);
+    // In a real implementation, this would write to the file system
+  }
+
+  async showToast(type: 'info' | 'warning' | 'error', message: string): Promise<void> {
+    console.log(`[BinaryIDE] [${type.toUpperCase()}] ${message}`);
+  }
+
+  async getOpenFiles(): Promise<string[]> {
+    return [];
+  }
+
+  async getCurrentFile(): Promise<{ path: string; contents: string } | undefined> {
+    return undefined;
+  }
+
+  async runCommand(command: string): Promise<void> {
+    console.log(`[BinaryIDE] Running command: ${command}`);
+  }
+}
 
 // Check if we should use TCP mode for debugging
 const useTcp = process.env.CAT_CORE_DEBUG === 'true';
 
 // Create the appropriate messenger
-const messenger = useTcp 
+const messenger = useTcp
   ? new TcpMessenger<ToCoreProtocol, FromCoreProtocol>()
   : new IpcMessenger<ToCoreProtocol, FromCoreProtocol>();
 
@@ -15,28 +67,12 @@ messenger.onError((message, error) => {
   console.error(`Error processing message ${message.messageId} of type ${message.messageType}:`, error);
 });
 
-// Register handlers for core protocol messages
-messenger.on('ping', async (message) => {
-  return `pong: ${message.data}`;
-});
+// Create IDE implementation
+const ide = new BinaryIDE();
 
-messenger.on('processMessage', async (message) => {
-  // Process the message from IDE
-  const { message: userMessage } = message.data;
-  
-  // Here we would typically call into the core logic
-  // For now, just echo back the message
-  const response = `Processed: ${userMessage}`;
-  
-  return { response };
-});
-
-messenger.on('getCoreInfo', async () => {
-  return {
-    version: '0.1.0',
-    status: 'ready'
-  };
-});
+// Initialize Core instance to handle messages
+// We don't need to use the core variable directly as it will register handlers via the messenger
+new Core(messenger, ide);
 
 // Log startup information
 if (useTcp) {
@@ -52,6 +88,7 @@ process.on('SIGINT', () => {
 });
 
 // Prevent unhandled promise rejections from crashing the process
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: unknown, promise: unknown) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
+

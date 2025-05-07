@@ -7,7 +7,7 @@
   "pkg": {
     "assets": [],
     "targets": [
-      "node16-darwin-x64"
+      "node18-darwin-x64"
     ],
     "outputPath": "bin"
   }

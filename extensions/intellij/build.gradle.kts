@@ -21,7 +21,8 @@ intellij {
 }
 
 dependencies {
-    implementation(files("../../core/build/libs/core-0.1.0.jar"))
+    // JSON library for communication with the core
+    implementation("org.json:json:20230618")
 }
 
 tasks {

@@ -3,17 +3,27 @@
   "version": "0.1.0",
   "description": "Binary package for CAT Core",
   "main": "dist/index.js",
+  "pkg": {
+    "scripts": [
+      "node_modules/axios/**/*"
+    ],
+    "targets": [
+      "node18-darwin-arm64"
+    ],
+    "outputPath": "bin"
+  },
   "scripts": {
     "build": "node build.js",
     "test": "jest",
     "clean": "rimraf dist bin"
   },
   "dependencies": {
+    "core": "file:../core",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
-    "@types/node": "^18.15.11",
+    "@types/node": "^18.19.96",
     "@types/uuid": "^9.0.1",
     "esbuild": "^0.17.16",
     "jest": "^29.5.0",

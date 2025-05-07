@@ -32,7 +32,7 @@ Manages the plugin's state and communication. This service:
 ### IdeProtocolClient
 
 Acts as a bridge between the IDE and the core functionality. This class:
-- Initializes the core service
+- Connects to the core service (Node.js application)
 - Provides methods to communicate with the core
 - Handles message passing between the IDE and core
 
@@ -43,15 +43,22 @@ Creates the tool window in the IDE's right panel. This factory:
 - Loads the React-based GUI
 - Sets up JavaScript bindings for communication
 
+## Core Communication
+
+The plugin communicates with the core service, which is a Node.js application:
+
+- **Development Mode**: The core runs as a TCP server from the `@binary/` folder
+- **Production Mode**: The core is built as a binary executable file and communicates with the extension via IPC
+
 ## Development
 
 ### Building the Plugin
 
 1. Clone the repository
-2. Build the core component:
+2. Start the core service in development mode:
    ```
-   cd core
-   ./gradlew build
+   cd @binary
+   npm start
    ```
 3. Build the plugin:
    ```
@@ -61,7 +68,8 @@ Creates the tool window in the IDE's right panel. This factory:
 
 ### Running the Plugin
 
-1. Run the plugin in a development instance:
+1. Make sure the core service is running (in development mode)
+2. Run the plugin in a development instance:
    ```
    cd extensions/intellij
    ./gradlew runIde
@@ -81,9 +89,13 @@ This will create a `.zip` file in `build/distributions` that can be installed in
 
 - IntelliJ IDEA 2023.1 or later
 - Java 17 or later
+- Node.js (for development mode)
 
 ## Configuration
 
 The plugin can be configured through environment variables:
 
 - `CAT_GUI_URL`: Custom URL for the GUI app (optional)
+- `CAT_CORE_HOST`: Host address for the core service (default: localhost)
+- `CAT_CORE_PORT`: Port for the core service (default: 3000)
+- `CAT_CORE_MODE`: Communication mode - "tcp" for development, "ipc" for production (default: tcp)

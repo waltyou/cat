@@ -7,7 +7,7 @@
   "pkg": {
     "assets": [],
     "targets": [
-      "node16-linux-arm64"
+      "node18-linux-arm64"
     ],
     "outputPath": "bin"
   }

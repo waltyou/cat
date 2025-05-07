@@ -1,0 +1,1 @@
+read Continue's Vs Code Extension folder carefully, and help to init the vscode extension folder with simplest feature in this project. 

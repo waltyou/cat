@@ -8,7 +8,7 @@ function createBinaryProcess() {
   const process = spawn('node', [binaryPath], {
     stdio: ['pipe', 'pipe', 'pipe']
   });
-  
+
   return process;
 }
 
@@ -20,7 +20,7 @@ function sendMessage(process: any, messageType: string, data: any) {
     messageId,
     data
   };
-  
+
   process.stdin.write(JSON.stringify(message) + '\n');
   return messageId;
 }
@@ -32,20 +32,25 @@ function waitForResponse(process: any, messageId: string, timeout = 5000): Promi
     const timeoutId = setTimeout(() => {
       reject(new Error(`Timeout waiting for response to message ${messageId}`));
     }, timeout);
-    
+
     const dataHandler = (data: Buffer) => {
       buffer += data.toString();
-      
+
       // Process complete messages
       const messages = buffer.split('\n');
       buffer = messages.pop() || '';
-      
+
       for (const messageStr of messages) {
         if (!messageStr.trim()) continue;
-        
+
+        // Skip lines that don't look like JSON (likely console.log output)
+        if (!messageStr.startsWith('{')) {
+          continue;
+        }
+
         try {
           const message = JSON.parse(messageStr);
-          
+
           if (message.messageId === messageId) {
             clearTimeout(timeoutId);
             process.stdout.removeListener('data', dataHandler);
@@ -56,47 +61,47 @@ function waitForResponse(process: any, messageId: string, timeout = 5000): Promi
         }
       }
     };
-    
+
     process.stdout.on('data', dataHandler);
   });
 }
 
 describe('Binary Tests', () => {
   let binaryProcess: any;
-  
+
   beforeEach(() => {
     binaryProcess = createBinaryProcess();
   });
-  
+
   afterEach(() => {
     if (binaryProcess) {
       binaryProcess.kill();
     }
   });
-  
+
   test('should respond to ping message', async () => {
     const messageId = sendMessage(binaryProcess, 'ping', 'test');
     const response = await waitForResponse(binaryProcess, messageId);
-    
+
     expect(response.messageType).toBe('response:ping');
     expect(response.messageId).toBe(messageId);
     expect(response.data).toBe('pong: test');
   });
-  
+
   test('should process a message', async () => {
     const messageId = sendMessage(binaryProcess, 'processMessage', { message: 'Hello, world!' });
     const response = await waitForResponse(binaryProcess, messageId);
-    
+
     expect(response.messageType).toBe('response:processMessage');
     expect(response.messageId).toBe(messageId);
     expect(response.data).toHaveProperty('response');
     expect(response.data.response).toBe('Processed: Hello, world!');
   });
-  
+
   test('should return core info', async () => {
     const messageId = sendMessage(binaryProcess, 'getCoreInfo', undefined);
     const response = await waitForResponse(binaryProcess, messageId);
-    
+
     expect(response.messageType).toBe('response:getCoreInfo');
     expect(response.messageId).toBe(messageId);
     expect(response.data).toHaveProperty('version');

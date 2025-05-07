@@ -30,7 +30,6 @@ The build process creates binaries for:
 
 - Platform-specific configurations are stored in pkgJson/{platform}-{arch}/package.json
 - These files define which assets to include in each binary
-- Native modules like sqlite3 and @lancedb are handled specially for each platform
 
 ## Testing
 
