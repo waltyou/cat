@@ -14,7 +14,7 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _extensionPath: string,
     private readonly _core: Core | undefined
-  ) {}
+  ) { }
 
   /**
    * Called when a view is first created to set up the webview
@@ -169,7 +169,13 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
       // Handle both script tag formats
       let modifiedHtml = indexHtml;
 
-      // Replace simple src attribute
+      // Replace module script src attribute for index.tsx
+      modifiedHtml = modifiedHtml.replace(
+        /src="\/src\/index\.tsx"/g,
+        `src="${bundleUri}"`
+      );
+
+      // Replace simple src attribute for bundle.js
       modifiedHtml = modifiedHtml.replace(
         /src="bundle\.js"/g,
         `src="${bundleUri}"`
