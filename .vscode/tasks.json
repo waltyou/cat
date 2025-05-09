@@ -41,7 +41,7 @@
       "options": {
         "cwd": "${workspaceFolder}/gui",
         "env": {
-          "VITE_PORT": "5174"
+          "VITE_PORT": "5173"
         }
       },
       "args": [
