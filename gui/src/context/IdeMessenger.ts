@@ -26,8 +26,8 @@ export class IdeMessenger {
 
   constructor() {
     // Detect IDE type based on localStorage setting
-    const storedIde = localStorage.getItem('ideType');
-    if (storedIde === 'jetbrains') {
+    const storedIde = localStorage.getItem('ide');
+    if (storedIde && JSON.parse(storedIde) === 'jetbrains') {
       this.ideType = IdeType.JETBRAINS;
       this.jetbrains = this.getJetBrainsApi();
     } else {

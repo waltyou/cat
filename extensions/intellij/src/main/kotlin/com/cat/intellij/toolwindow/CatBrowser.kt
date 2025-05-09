@@ -75,7 +75,7 @@ class CatBrowser(private val project: Project) {
             service<CatPluginService>().logInfo("Setting IDE type in localStorage")
             try {
                 browser?.cefBrowser?.executeJavaScript(
-                    "localStorage.setItem('ideType', 'jetbrains');",
+                    "localStorage.setItem('ide', 'jetbrains');",
                     browser?.cefBrowser?.url ?: "",
                     0
                 )
