@@ -65,6 +65,8 @@ class CatBrowser(val project: Project, url: String) {
                 return@addHandler null
             }
 
+            //TODO handle intellij speicail msg types
+
             null
         }
 

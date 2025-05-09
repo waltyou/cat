@@ -12,7 +12,7 @@ import com.intellij.openapi.util.Disposer
  * Main service for the Cat plugin.
  * This service manages the plugin's state and communication with the core.
  */
-@Service
+@Service(Service.Level.PROJECT)
 class CatPluginService : Disposable {
     private val logger = Logger.getInstance(CatPluginService::class.java)
 

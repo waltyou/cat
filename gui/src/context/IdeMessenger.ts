@@ -21,7 +21,6 @@ enum IdeType {
 export class IdeMessenger {
   private handlers: Map<string, (message: WebviewSingleMessage) => void> = new Map();
   private vscode: any;
-  private jetbrains: any;
   private ideType: IdeType;
 
   constructor() {
@@ -29,7 +28,6 @@ export class IdeMessenger {
     const storedIde = localStorage.getItem('ide');
     if (storedIde && JSON.parse(storedIde) === 'jetbrains') {
       this.ideType = IdeType.JETBRAINS;
-      this.jetbrains = this.getJetBrainsApi();
     } else {
       this.ideType = IdeType.VSCODE;
       this.vscode = this.acquireVsCodeApi();
@@ -47,14 +45,6 @@ export class IdeMessenger {
   private acquireVsCodeApi() {
     // @ts-ignore
     return typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-  }
-
-  /**
-   * Get JetBrains API
-   */
-  private getJetBrainsApi() {
-    // @ts-ignore
-    return typeof window.postIntellijMessage !== 'undefined' ? window.postIntellijMessage : null;
   }
 
   /**
@@ -117,30 +107,19 @@ export class IdeMessenger {
       }
       // Handle JetBrains
       else if (this.ideType === IdeType.JETBRAINS) {
-        if (!this.jetbrains) {
-          reject(new Error('JetBrains API not available'));
-          return;
+        if (window.postIntellijMessage === undefined) {
+          console.log(
+            "Unable to send message: postIntellijMessage is undefined. ",
+            messageType,
+            data,
+          );
+          throw new Error("postIntellijMessage is undefined");
         }
 
         try {
-          // For JetBrains, we use the JavaScript interface directly
-          let response;
-
-          // Call the appropriate method based on message type
-          switch (messageType) {
-            case 'ping':
-              response = this.jetbrains.pingCore(JSON.stringify(data));
-              break;
-            case 'processMessage':
-              response = this.jetbrains.processMessage(JSON.stringify(data));
-              break;
-            case 'getCoreInfo':
-              response = this.jetbrains.getCoreInfo();
-              break;
-            default:
-              reject(new Error(`Unsupported message type for JetBrains: ${messageType}`));
-              return;
-          }
+          // Use the single postIntellijMessage function for all message types
+          const messageId = uuidv4();
+          let response = window.postIntellijMessage(messageType, JSON.stringify(data), messageId);
 
           // For JetBrains, the response is the actual string content, not a number
           // Don't try to parse it as JSON unless it starts with { or [
@@ -154,7 +133,7 @@ export class IdeMessenger {
             }
           } else {
             // If it's not JSON-parseable, just return the raw response
-            resolve(response);
+            resolve("response is: " + response);
           }
         } catch (error) {
           reject(error instanceof Error ? error : new Error(String(error)));
@@ -175,3 +154,5 @@ export class IdeMessenger {
     this.handlers.clear();
   }
 }
+
+
