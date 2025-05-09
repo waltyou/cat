@@ -3,7 +3,7 @@
         <ExternalSystemSettings>
             <option name="env">
                 <map>
-                    <entry key="GUI_URL" value="http://localhost:5173/jetbrains_index.html"/>
+                    <entry key="CAT_GUI_URL" value="http://localhost:5173/jetbrains_index.html"/>
                     <entry key="ORG_GRADLE_PROJECT_platformVersion" value="2024.1"/>
                     <entry key="USE_TCP" value="true"/>
                 </map>

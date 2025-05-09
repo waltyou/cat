@@ -6,6 +6,22 @@ import { store } from './redux';
 import App from './App';
 import { IdeMessengerProvider } from './context/IdeMessengerContext';
 
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
 // Mock the useIdeMessengerRequest hook
 vi.mock('./hooks/useIdeMessengerRequest', () => ({
   useIdeMessengerRequest: () => ({
@@ -17,7 +33,12 @@ vi.mock('./hooks/useIdeMessengerRequest', () => ({
 }));
 
 describe('App component', () => {
-  it('renders without crashing', () => {
+  beforeEach(() => {
+    // Clear localStorage before each test
+    localStorageMock.clear();
+  });
+
+  it('renders with VS Code title by default', () => {
     render(
       <Provider store={store}>
         <IdeMessengerProvider>
@@ -28,5 +49,21 @@ describe('App component', () => {
 
     // Check if the component renders with the expected title
     expect(screen.getByText(/Cat VS Code Extension/i)).toBeDefined();
+  });
+
+  it('renders with JetBrains title when localStorage is set', () => {
+    // Set localStorage to JetBrains
+    localStorageMock.setItem('ide', '"jetbrains"');
+
+    render(
+      <Provider store={store}>
+        <IdeMessengerProvider>
+          <App />
+        </IdeMessengerProvider>
+      </Provider>
+    );
+
+    // Check if the component renders with the expected title
+    expect(screen.getByText(/Cat JetBrains Extension/i)).toBeDefined();
   });
 });

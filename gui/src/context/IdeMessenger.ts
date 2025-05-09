@@ -7,20 +7,38 @@ import {
 } from 'core/src/protocol/webview';
 
 /**
- * IdeMessenger class for communication between WebView and VS Code Extension
+ * Enum for supported IDE types
+ */
+enum IdeType {
+  VSCODE = 'vscode',
+  JETBRAINS = 'jetbrains',
+  UNKNOWN = 'unknown'
+}
+
+/**
+ * IdeMessenger class for communication between WebView and IDE Extensions (VS Code and IntelliJ)
  */
 export class IdeMessenger {
   private handlers: Map<string, (message: WebviewSingleMessage) => void> = new Map();
   private vscode: any;
+  private jetbrains: any;
+  private ideType: IdeType;
 
   constructor() {
-    // Get VS Code API
-    this.vscode = this.acquireVsCodeApi();
+    // Detect IDE type based on localStorage setting
+    const storedIde = localStorage.getItem('ide');
+    if (storedIde && JSON.parse(storedIde) === 'jetbrains') {
+      this.ideType = IdeType.JETBRAINS;
+      this.jetbrains = this.getJetBrainsApi();
+    } else {
+      this.ideType = IdeType.VSCODE;
+      this.vscode = this.acquireVsCodeApi();
+    }
 
     // Set up message listener
     window.addEventListener('message', this.handleMessage);
 
-    console.log('IdeMessenger initialized');
+    console.log(`IdeMessenger initialized for ${this.ideType}`);
   }
 
   /**
@@ -32,7 +50,15 @@ export class IdeMessenger {
   }
 
   /**
-   * Handle incoming messages from VS Code
+   * Get JetBrains API
+   */
+  private getJetBrainsApi() {
+    // @ts-ignore
+    return typeof window.catIde !== 'undefined' ? window.catIde : null;
+  }
+
+  /**
+   * Handle incoming messages from IDE
    */
   private handleMessage = (event: MessageEvent) => {
     const message = event.data as WebviewSingleMessage;
@@ -56,36 +82,77 @@ export class IdeMessenger {
   };
 
   /**
-   * Send a request to VS Code and wait for a response
+   * Send a request to IDE and wait for a response
    */
   public async request<T extends keyof FromWebviewProtocol>(
     messageType: T,
     data: FromWebviewProtocol[T][0],
   ): Promise<FromWebviewProtocol[T][1]> {
     return new Promise((resolve, reject) => {
-      if (!this.vscode) {
-        reject(new Error('VS Code API not available'));
-        return;
-      }
-
-      const messageId = uuidv4();
-
-      // Register handler for the response
-      this.handlers.set(messageId, (message: WebviewSingleMessage) => {
-        if (message.status === 'success') {
-          resolve((message as SuccessWebviewSingleMessage).content);
-        } else {
-          const errorMessage = (message as ErrorWebviewSingleMessage).content;
-          reject(new Error(errorMessage.message));
+      // Handle JetBrains
+      if (this.ideType === IdeType.JETBRAINS) {
+        if (!this.jetbrains) {
+          reject(new Error('JetBrains API not available'));
+          return;
         }
-      });
 
-      // Send the message to VS Code
-      this.vscode.postMessage({
-        type: messageType,
-        messageId,
-        content: data,
-      });
+        try {
+          // For JetBrains, we use the JavaScript interface directly
+          let response;
+
+          // Call the appropriate method based on message type
+          switch (messageType) {
+            case 'ping':
+              response = this.jetbrains.pingCore(JSON.stringify(data));
+              break;
+            case 'processMessage':
+              response = this.jetbrains.processMessage(JSON.stringify(data));
+              break;
+            case 'getCoreInfo':
+              response = this.jetbrains.getCoreInfo();
+              break;
+            default:
+              reject(new Error(`Unsupported message type for JetBrains: ${messageType}`));
+              return;
+          }
+
+          // Parse the response if it's a string
+          const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
+          resolve(parsedResponse);
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      // Handle VS Code
+      else if (this.ideType === IdeType.VSCODE) {
+        if (!this.vscode) {
+          reject(new Error('VS Code API not available'));
+          return;
+        }
+
+        const messageId = uuidv4();
+
+        // Register handler for the response
+        this.handlers.set(messageId, (message: WebviewSingleMessage) => {
+          if (message.status === 'success') {
+            resolve((message as SuccessWebviewSingleMessage).content);
+          } else {
+            const errorMessage = (message as ErrorWebviewSingleMessage).content;
+            reject(new Error(errorMessage.message));
+          }
+        });
+
+        // Send the message to VS Code
+        this.vscode.postMessage({
+          type: messageType,
+          messageId,
+          content: data,
+        });
+      }
+      // Handle unknown IDE
+      else {
+        reject(new Error('Unknown IDE type'));
+      }
     });
   }
 
