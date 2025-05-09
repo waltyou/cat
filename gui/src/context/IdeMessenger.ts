@@ -26,8 +26,8 @@ export class IdeMessenger {
 
   constructor() {
     // Detect IDE type based on localStorage setting
-    const storedIde = localStorage.getItem('ide');
-    if (storedIde && JSON.parse(storedIde) === 'jetbrains') {
+    const storedIde = localStorage.getItem('ideType');
+    if (storedIde === 'jetbrains') {
       this.ideType = IdeType.JETBRAINS;
       this.jetbrains = this.getJetBrainsApi();
     } else {
@@ -89,8 +89,34 @@ export class IdeMessenger {
     data: FromWebviewProtocol[T][0],
   ): Promise<FromWebviewProtocol[T][1]> {
     return new Promise((resolve, reject) => {
+      // Handle VS Code
+      if (this.ideType === IdeType.VSCODE) {
+        if (!this.vscode) {
+          reject(new Error('VS Code API not available'));
+          return;
+        }
+
+        const messageId = uuidv4();
+
+        // Register handler for the response
+        this.handlers.set(messageId, (message: WebviewSingleMessage) => {
+          if (message.status === 'success') {
+            resolve((message as SuccessWebviewSingleMessage).content);
+          } else {
+            const errorMessage = (message as ErrorWebviewSingleMessage).content;
+            reject(new Error(errorMessage.message));
+          }
+        });
+
+        // Send the message to VS Code
+        this.vscode.postMessage({
+          type: messageType,
+          messageId,
+          content: data,
+        });
+      }
       // Handle JetBrains
-      if (this.ideType === IdeType.JETBRAINS) {
+      else if (this.ideType === IdeType.JETBRAINS) {
         if (!this.jetbrains) {
           reject(new Error('JetBrains API not available'));
           return;
@@ -116,38 +142,23 @@ export class IdeMessenger {
               return;
           }
 
-          // Parse the response if it's a string
-          const parsedResponse = typeof response === 'string' ? JSON.parse(response) : response;
-          resolve(parsedResponse);
+          // For JetBrains, the response is the actual string content, not a number
+          // Don't try to parse it as JSON unless it starts with { or [
+          if (typeof response === 'string' && (response.trim().startsWith('{') || response.trim().startsWith('['))) {
+            try {
+              const parsedResponse = JSON.parse(response);
+              resolve(parsedResponse);
+            } catch (e) {
+              // If parsing fails, just return the string
+              resolve(response);
+            }
+          } else {
+            // If it's not JSON-parseable, just return the raw response
+            resolve(response);
+          }
         } catch (error) {
           reject(error instanceof Error ? error : new Error(String(error)));
         }
-      }
-      // Handle VS Code
-      else if (this.ideType === IdeType.VSCODE) {
-        if (!this.vscode) {
-          reject(new Error('VS Code API not available'));
-          return;
-        }
-
-        const messageId = uuidv4();
-
-        // Register handler for the response
-        this.handlers.set(messageId, (message: WebviewSingleMessage) => {
-          if (message.status === 'success') {
-            resolve((message as SuccessWebviewSingleMessage).content);
-          } else {
-            const errorMessage = (message as ErrorWebviewSingleMessage).content;
-            reject(new Error(errorMessage.message));
-          }
-        });
-
-        // Send the message to VS Code
-        this.vscode.postMessage({
-          type: messageType,
-          messageId,
-          content: data,
-        });
       }
       // Handle unknown IDE
       else {

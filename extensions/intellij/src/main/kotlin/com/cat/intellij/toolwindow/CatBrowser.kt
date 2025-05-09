@@ -2,6 +2,7 @@ package com.cat.intellij.toolwindow
 
 import com.cat.intellij.service.CatPluginService
 import com.intellij.openapi.components.service
+import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefClient
@@ -111,24 +112,63 @@ class CatBrowser(private val project: Project) {
         // Create a JavaScript handler
         val handler = CatJavaScriptHandler(project)
 
-        // Register the handler with the browser
+        // Create a JavaScript query object for each method
+        val pingCoreQuery = JBCefJSQuery.create(this.browser!!)
+        val processMessageQuery = JBCefJSQuery.create(this.browser!!)
+        val getCoreInfoQuery = JBCefJSQuery.create(this.browser!!)
+
+        // Set up handlers for each query
+        pingCoreQuery.addHandler { message: String ->
+            try {
+                val result = handler.pingCore(message)
+                return@addHandler JBCefJSQuery.Response(result)
+            } catch (e: Exception) {
+                service<CatPluginService>().logError("Error in pingCore", e)
+                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
+            }
+        }
+
+        processMessageQuery.addHandler { message: String ->
+            try {
+                val result = handler.processMessage(message)
+                return@addHandler JBCefJSQuery.Response(result)
+            } catch (e: Exception) {
+                service<CatPluginService>().logError("Error in processMessage", e)
+                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
+            }
+        }
+
+        getCoreInfoQuery.addHandler { _: String ->
+            try {
+                // The parameter is ignored for getCoreInfo
+                val result = handler.getCoreInfo()
+                return@addHandler JBCefJSQuery.Response(result)
+            } catch (e: Exception) {
+                service<CatPluginService>().logError("Error in getCoreInfo", e)
+                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
+            }
+        }
+
+        // Register the handler with the browser using proper JCEF JavaScript bridge
         browser.executeJavaScript(
             """
             window.catIde = {
                 pingCore: function(message) {
-                    return ${handler.javaClass.name}.pingCore(message);
+                    return ${pingCoreQuery.inject("message")};
                 },
                 processMessage: function(message) {
-                    return ${handler.javaClass.name}.processMessage(message);
+                    return ${processMessageQuery.inject("message")};
                 },
                 getCoreInfo: function() {
-                    return ${handler.javaClass.name}.getCoreInfo();
+                    return ${getCoreInfoQuery.inject("null")};
                 }
             };
             """.trimIndent(),
             browser.url,
             0
         )
+
+        service<CatPluginService>().logInfo("JavaScript bindings initialized successfully")
     }
 
     /**
@@ -155,7 +195,7 @@ class CatBrowser(private val project: Project) {
             // Try to find the GUI in the project directory
             val projectDir = project.basePath
             if (projectDir != null) {
-                val guiPath = java.io.File(projectDir, "gui/dist/index.html")
+                val guiPath = java.io.File(java.io.File(projectDir), "gui/dist/index.html")
                 if (guiPath.exists()) {
                     service<CatPluginService>().logInfo("Found GUI at: ${guiPath.toURI().toURL()}")
                     return guiPath.toURI().toURL().toString()

@@ -10,14 +10,14 @@ interface IdeMessengerProviderProps {
 
 export const IdeMessengerProvider: React.FC<IdeMessengerProviderProps> = ({ children }) => {
   const [messenger] = useState<IdeMessenger>(() => new IdeMessenger());
-  
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
       messenger.dispose();
     };
   }, [messenger]);
-  
+
   return (
     <IdeMessengerContext.Provider value={messenger}>
       {children}

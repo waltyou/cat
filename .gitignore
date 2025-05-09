@@ -135,19 +135,15 @@ codeql
 **/**/.qodana
 **/**/build
 
-continue_server.build
-continue_server.dist
 
 Icon
 Icon?
 
-.continuerc.json
 .aider*
 
 notes.md
 
 manual-testing-sandbox/.idea/**
-manual-testing-sandbox/.continue/**
 extensions/intellij/.idea/**
 
 **/.idea/workspace.xml
@@ -158,9 +154,7 @@ extensions/intellij/.idea/**
 
 
 extensions/intellij/bin
-extensions/.continue-debug/
 
 *.vsix
 
-.continuerules
-**/.continue/assistants/
+.vscode/chrome-debug-profile

@@ -12,10 +12,9 @@ const App: React.FC = () => {
 
   // Detect IDE type from localStorage
   useEffect(() => {
-    const storedIde = localStorage.getItem('ide');
+    const storedIde = localStorage.getItem('ideType');
     if (storedIde) {
-      const parsedIde = JSON.parse(storedIde);
-      setIdeType(parsedIde === 'jetbrains' ? 'JetBrains' : 'VS Code');
+      setIdeType(storedIde === 'jetbrains' ? 'JetBrains' : 'VS Code');
     } else {
       setIdeType('VS Code');
     }

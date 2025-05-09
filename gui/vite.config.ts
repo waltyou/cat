@@ -21,9 +21,7 @@ export default defineConfig(({ command }) => {
       sourcemap: true,
       rollupOptions: {
         input: {
-          main: resolve(__dirname, isProduction
-            ? 'public/index.html'
-            : 'public/dev_index.html'),
+          main: resolve(__dirname, 'index.html'),
         },
         output: {
           entryFileNames: 'bundle.js',
@@ -34,6 +32,9 @@ export default defineConfig(({ command }) => {
     },
     server: {
       open: false,
+      port: 5174,
+      strictPort: true,
+      host: 'localhost',
     },
     optimizeDeps: {
       esbuildOptions: {

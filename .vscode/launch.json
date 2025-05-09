@@ -31,6 +31,20 @@
       },
       "console": "integratedTerminal",
       "preLaunchTask": "build-binary"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Vite",
+      "url": "http://localhost:5174",
+      "webRoot": "${workspaceFolder}/gui/src",
+      "sourceMaps": true,
+      "runtimeArgs": [
+        "--remote-debugging-port=9222",
+        "--no-first-run",
+        "--user-data-dir=${workspaceFolder}/.vscode/chrome-debug-profile",
+        "--disable-background-networking"
+      ]
     }
   ]
 }
