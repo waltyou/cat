@@ -83,9 +83,24 @@ class CatBrowser(val project: Project, url: String) {
             }
         }, browser.cefBrowser)
 
-        // Load the url only after the protocolClient is initialized
-        catPluginService.onProtocolClientInitialized {
+        // Load the URL immediately and don't wait for the core messenger
+        try {
+            println("Loading GUI URL: $url")
+
+            // Set the IDE type in localStorage before loading the URL
+            browser.cefBrowser.executeJavaScript(
+                "localStorage.setItem('ide', 'jetbrains');",
+                browser.cefBrowser.url ?: "",
+                0
+            )
+
+            // Load the URL
             browser.loadURL(url)
+
+            println("GUI URL loaded successfully")
+        } catch (e: Exception) {
+            println("Error loading GUI URL: ${e.message}")
+            e.printStackTrace()
         }
     }
 

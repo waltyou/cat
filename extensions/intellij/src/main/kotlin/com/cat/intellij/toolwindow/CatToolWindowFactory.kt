@@ -38,25 +38,25 @@ class CatToolWindowFactory : ToolWindowFactory {
      * Get the URL for the GUI.
      */
     private fun getGuiUrl(project: Project): String {
+        println("Resolving GUI URL...")
+
         // Check if a custom URL is provided via environment variable
         val customUrl = System.getenv("CAT_GUI_URL")
         if (!customUrl.isNullOrBlank()) {
+            println("Using custom GUI URL from environment: $customUrl")
             return customUrl
         }
 
         // Try to find the GUI resources in the plugin's resources
-        val guiResource = javaClass.classLoader.getResource("gui/dist/index.html")
-        if (guiResource != null) {
-            return guiResource.toExternalForm()
-        }
-
-        // Try to find the GUI in the project directory
-        val projectDir = project.basePath
-        if (projectDir != null) {
-            val guiPath = java.io.File(java.io.File(projectDir), "gui/dist/index.html")
-            if (guiPath.exists()) {
-                return guiPath.toURI().toURL().toString()
+        try {
+            val guiResource = javaClass.classLoader.getResource("gui/dist/index.html")
+            if (guiResource != null) {
+                val url = guiResource.toExternalForm()
+                println("Found GUI in plugin resources: $url")
+                return url
             }
+        } catch (e: Exception) {
+            println("Error finding GUI in plugin resources: ${e.message}")
         }
 
         // Fallback to a simple HTML page
