@@ -1,251 +1,128 @@
 package com.cat.intellij.toolwindow
 
+import com.cat.intellij.activities.CatPluginDisposable
 import com.cat.intellij.service.CatPluginService
-import com.intellij.openapi.components.service
-import com.intellij.openapi.components.ServiceManager
+import com.cat.intellij.constants.MessageTypes.Companion.PASS_THROUGH_TO_CORE
+import com.cat.intellij.factories.CustomSchemeHandlerFactory
+import com.cat.intellij.service.CatExtensionSettings
+import com.cat.intellij.utils.uuid
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
-import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefClient
-import com.intellij.ui.jcef.JBCefJSQuery
-import org.cef.handler.CefLifeSpanHandlerAdapter
-import java.awt.BorderLayout
-import javax.swing.JPanel
+import com.intellij.openapi.util.Disposer
+import com.intellij.ui.jcef.*
+import com.intellij.ui.jcef.JBCefClient.Properties
+import com.intellij.util.application
+import org.cef.CefApp
+import org.cef.browser.CefBrowser
+import org.cef.handler.CefLoadHandlerAdapter
 
-/**
- * Browser component for the Cat tool window.
- * Uses JBCefBrowser to display web content.
- */
-class CatBrowser(private val project: Project) {
-    private val panel = JPanel(BorderLayout())
-    private var browser: JBCefBrowser? = null
-    private var client: JBCefClient? = null
+class CatBrowser(val project: Project, url: String) {
+    private fun registerAppSchemeHandler() {
+        CefApp.getInstance().registerSchemeHandlerFactory(
+            "http",
+            "cat",
+            CustomSchemeHandlerFactory()
+        )
+    }
+
+    val browser: JBCefBrowser
+
+    val catPluginService: CatPluginService = project.getService(CatPluginService::class.java)
+
+    companion object {
+        private const val JS_QUERY_POOL_SIZE = 100
+    }
 
     init {
-        initializeBrowser()
-    }
+        val isOSREnabled = application.getService(CatExtensionSettings::class.java)?.catState?.enableOSR ?: false
 
-    /**
-     * Get the content panel.
-     */
-    fun getContent(): JPanel {
-        return panel
-    }
+        this.browser = JBCefBrowser.createBuilder().setOffScreenRendering(isOSREnabled).build().apply {
+            // Configure JS_QUERY_POOL_SIZE after JBCefClient is instantiated
+            jbCefClient.setProperty(Properties.JS_QUERY_POOL_SIZE, JS_QUERY_POOL_SIZE)
+        }
 
-    /**
-     * Initialize the browser.
-     */
-    private fun initializeBrowser() {
-        try {
-            service<CatPluginService>().logInfo("Initializing browser for Cat tool window")
+        registerAppSchemeHandler()
+        Disposer.register(CatPluginDisposable.getInstance(project), browser)
 
-            // Create the JBCefBrowser
-            browser = JBCefBrowser()
-            client = browser?.jbCefClient
+        // Listen for events sent from browser
+        val myJSQueryOpenInBrowser = JBCefJSQuery.create((browser as JBCefBrowserBase?)!!)
 
-            // Add a life span handler to handle browser events
-            service<CatPluginService>().logInfo("Adding life span handler")
-            client?.cefClient?.addLifeSpanHandler(object : CefLifeSpanHandlerAdapter() {
-                override fun onAfterCreated(browser: org.cef.browser.CefBrowser?) {
-                    super.onAfterCreated(browser)
-                    service<CatPluginService>().logInfo("Browser created, initializing JavaScript bindings")
-                    // Initialize JavaScript bindings after the browser is created
-                    initializeJavaScriptBindings(browser)
+        myJSQueryOpenInBrowser.addHandler { msg: String? ->
+            val parser = JsonParser()
+            val json: JsonObject = parser.parse(msg).asJsonObject
+            val messageType = json.get("messageType").asString
+            val data = json.get("data")
+            val messageId = json.get("messageId")?.asString
+
+            val respond = fun(data: Any?) {
+                sendToWebview(messageType, data, messageId ?: uuid())
+            }
+
+            if (PASS_THROUGH_TO_CORE.contains(messageType)) {
+                catPluginService.coreMessenger?.request(messageType, data, messageId, respond)
+                return@addHandler null
+            }
+
+            null
+        }
+
+        // Listen for the page load event
+        browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
+            override fun onLoadingStateChange(
+                browser: CefBrowser?,
+                isLoading: Boolean,
+                canGoBack: Boolean,
+                canGoForward: Boolean
+            ) {
+                if (!isLoading) {
+                    // The page has finished loading
+                    executeJavaScript(browser, myJSQueryOpenInBrowser)
                 }
-            })
-
-            // Get the GUI URL
-            val guiUrl = getGuiUrl()
-            service<CatPluginService>().logInfo("Using GUI URL: $guiUrl")
-
-            // Load the URL
-            browser?.loadURL(guiUrl)
-
-            // Add the browser to the panel
-            service<CatPluginService>().logInfo("Adding browser to panel")
-            browser?.component?.let {
-                panel.add(it, BorderLayout.CENTER)
-                service<CatPluginService>().logInfo("Browser UI component added to panel")
-            } ?: run {
-                service<CatPluginService>().logError("Browser UI component is null")
-                showErrorPanel("Failed to get browser UI component")
-                return
             }
+        }, browser.cefBrowser)
 
-            // Set the IDE type in localStorage
-            service<CatPluginService>().logInfo("Setting IDE type in localStorage")
-            try {
-                browser?.cefBrowser?.executeJavaScript(
-                    "localStorage.setItem('ide', 'jetbrains');",
-                    browser?.cefBrowser?.url ?: "",
-                    0
-                )
-                service<CatPluginService>().logInfo("IDE type set in localStorage")
-            } catch (e: Exception) {
-                service<CatPluginService>().logError("Failed to set IDE type in localStorage", e)
-                // Continue anyway, this is not critical
-            }
-
-            // Log initialization
-            service<CatPluginService>().logInfo("Browser successfully initialized for Cat tool window")
-        } catch (e: Exception) {
-            service<CatPluginService>().logError("Failed to initialize browser", e)
-            showErrorPanel("Failed to initialize browser: ${e.message}")
+        // Load the url only after the protocolClient is initialized
+        catPluginService.onProtocolClientInitialized {
+            browser.loadURL(url)
         }
     }
 
-    /**
-     * Show an error panel with the given message.
-     */
-    private fun showErrorPanel(message: String) {
-        val errorPanel = JPanel(BorderLayout())
-        val errorLabel = javax.swing.JLabel("<html><body style='width: 300px'><h3>Error</h3><p>$message</p></body></html>")
-        errorPanel.add(errorLabel, BorderLayout.CENTER)
-        panel.add(errorPanel, BorderLayout.CENTER)
+    fun executeJavaScript(browser: CefBrowser?, myJSQueryOpenInBrowser: JBCefJSQuery) {
+        // Execute JavaScript - you might want to handle potential exceptions here
+        val script = """window.postIntellijMessage = function(messageType, data, messageId) {
+                const msg = JSON.stringify({messageType, data, messageId});
+                ${myJSQueryOpenInBrowser.inject("msg")}
+            }""".trimIndent()
+
+        browser?.executeJavaScript(script, browser.url, 0)
     }
 
-    /**
-     * Initialize JavaScript bindings.
-     */
-    private fun initializeJavaScriptBindings(browser: org.cef.browser.CefBrowser?) {
-        if (browser == null) return
-
-        // Create a JavaScript handler
-        val handler = CatJavaScriptHandler(project)
-
-        // Create a JavaScript query object for each method
-        val pingCoreQuery = JBCefJSQuery.create(this.browser!!)
-        val processMessageQuery = JBCefJSQuery.create(this.browser!!)
-        val getCoreInfoQuery = JBCefJSQuery.create(this.browser!!)
-
-        // Set up handlers for each query
-        pingCoreQuery.addHandler { message: String ->
-            try {
-                val result = handler.pingCore(message)
-                return@addHandler JBCefJSQuery.Response(result)
-            } catch (e: Exception) {
-                service<CatPluginService>().logError("Error in pingCore", e)
-                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
-            }
-        }
-
-        processMessageQuery.addHandler { message: String ->
-            try {
-                val result = handler.processMessage(message)
-                return@addHandler JBCefJSQuery.Response(result)
-            } catch (e: Exception) {
-                service<CatPluginService>().logError("Error in processMessage", e)
-                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
-            }
-        }
-
-        getCoreInfoQuery.addHandler { _: String ->
-            try {
-                // The parameter is ignored for getCoreInfo
-                val result = handler.getCoreInfo()
-                return@addHandler JBCefJSQuery.Response(result)
-            } catch (e: Exception) {
-                service<CatPluginService>().logError("Error in getCoreInfo", e)
-                return@addHandler JBCefJSQuery.Response("Error: ${e.message}")
-            }
-        }
-
-        // Register the handler with the browser using proper JCEF JavaScript bridge
-        browser.executeJavaScript(
-            """
-            window.catIde = {
-                pingCore: function(message) {
-                    return ${pingCoreQuery.inject("message")};
-                },
-                processMessage: function(message) {
-                    return ${processMessageQuery.inject("message")};
-                },
-                getCoreInfo: function() {
-                    return ${getCoreInfoQuery.inject("null")};
-                }
-            };
-            """.trimIndent(),
-            browser.url,
-            0
+    fun sendToWebview(
+        messageType: String,
+        data: Any?,
+        messageId: String = uuid()
+    ) {
+        val jsonData = Gson().toJson(
+            mapOf(
+                "messageId" to messageId,
+                "messageType" to messageType,
+                "data" to data
+            )
         )
-
-        service<CatPluginService>().logInfo("JavaScript bindings initialized successfully")
-    }
-
-    /**
-     * Get the URL for the GUI.
-     */
-    private fun getGuiUrl(): String {
-        // Check if a custom URL is provided via environment variable
-        val customUrl = System.getenv("CAT_GUI_URL")
-        if (!customUrl.isNullOrBlank()) {
-            return customUrl
-        }
+        val jsCode = buildJavaScript(jsonData)
 
         try {
-            // Get the plugin's class loader
-            val classLoader = javaClass.classLoader
-
-            // Try to find the GUI resources in the plugin's resources
-            val guiResource = classLoader.getResource("gui/dist/index.html")
-            if (guiResource != null) {
-                service<CatPluginService>().logInfo("Found GUI at: ${guiResource.toExternalForm()}")
-                return guiResource.toExternalForm()
+            this.browser.executeJavaScriptAsync(jsCode).onError {
+                println("Failed to execute jsCode error: ${it.message}")
             }
-
-            // Try to find the GUI in the project directory
-            val projectDir = project.basePath
-            if (projectDir != null) {
-                val guiPath = java.io.File(java.io.File(projectDir), "gui/dist/index.html")
-                if (guiPath.exists()) {
-                    service<CatPluginService>().logInfo("Found GUI at: ${guiPath.toURI().toURL()}")
-                    return guiPath.toURI().toURL().toString()
-                }
-            }
-
-            // Fallback to a simple HTML page
-            service<CatPluginService>().logWarning("GUI not found, using fallback HTML")
-            return "data:text/html," + java.net.URLEncoder.encode("""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Cat GUI</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .error { color: red; margin: 10px 0; padding: 10px; border: 1px solid red; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Cat GUI</h1>
-                    <div class="error">
-                        <p>The GUI bundle was not found.</p>
-                        <p>Please build the GUI by running:</p>
-                        <code>cd gui && npm install && npm run build</code>
-                    </div>
-                </body>
-                </html>
-            """.trimIndent(), "UTF-8")
-        } catch (e: Exception) {
-            service<CatPluginService>().logError("Error determining GUI URL", e)
-
-            // Return a simple data URL as a fallback
-            return "data:text/html," + java.net.URLEncoder.encode("""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Cat GUI Error</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .error { color: red; margin: 10px 0; padding: 10px; border: 1px solid red; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Cat GUI Error</h1>
-                    <div class="error">
-                        <p>Error loading GUI: ${e.message}</p>
-                    </div>
-                </body>
-                </html>
-            """.trimIndent(), "UTF-8")
+        } catch (error: IllegalStateException) {
+            println("Webview not initialized yet $error")
         }
+    }
+
+    private fun buildJavaScript(jsonData: String): String {
+        return """window.postMessage($jsonData, "*");"""
     }
 }

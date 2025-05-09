@@ -1,6 +1,7 @@
 package com.cat.intellij.protocol
 
 import com.cat.intellij.ide.IntelliJIDE
+import com.google.gson.JsonElement
 import com.intellij.openapi.diagnostic.Logger
 import java.io.BufferedReader
 import java.io.FileNotFoundException
@@ -14,13 +15,11 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
 /**
- * Protocol client for communication between the IDE and the core.
- * This class acts as a bridge between IntelliJ and the core functionality.
- * It communicates with the Node.js core service via TCP in development mode
- * or via IPC in production mode.
+ * Messenger for communication with the core service.
+ * This class handles all communication with the core service via TCP or IPC.
  */
-class IdeProtocolClient(private val ide: IntelliJIDE) {
-    private val logger = Logger.getInstance(IdeProtocolClient::class.java)
+class CoreMessenger(private val ide: IntelliJIDE? = null) {
+    private val logger = Logger.getInstance(CoreMessenger::class.java)
 
     // Communication mode: "tcp" or "ipc"
     private val mode = System.getenv("CAT_CORE_MODE") ?: "tcp"
@@ -36,10 +35,15 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
     // Thread for reading responses
     private var readerThread: Thread? = null
 
+    // Flag to indicate if the messenger is initialized
+    private var isInitialized = false
+
     /**
-     * Initialize the protocol client.
+     * Initialize the messenger.
      */
     fun initialize() {
+        if (isInitialized) return
+
         try {
             when (mode) {
                 "tcp" -> initializeTcpConnection()
@@ -50,9 +54,12 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
                 }
             }
 
-            // Register IDE capabilities with the core
-            registerIdeCapabilities()
+            // Register IDE capabilities with the core if IDE is provided
+            if (ide != null) {
+                registerIdeCapabilities()
+            }
 
+            isInitialized = true
             logger.info("Core service initialized in $mode mode")
         } catch (e: Exception) {
             logger.error("Failed to initialize core service", e)
@@ -63,8 +70,8 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
      * Initialize TCP connection to the core service.
      */
     private fun initializeTcpConnection() {
-        val host = "127.0.0.1"
-        val port = 9876
+        val host = System.getenv("CAT_CORE_HOST") ?: "127.0.0.1"
+        val port = System.getenv("CAT_CORE_PORT")?.toIntOrNull() ?: 9876
         try {
             // Connect to the core service
             socket = Socket(host, port)
@@ -195,12 +202,14 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
         }
 
         // Try to find the binary in the plugin's directory
-        val pluginPath = ide.javaClass.protectionDomain.codeSource.location.toURI()
-        val pluginDir = java.nio.file.Paths.get(pluginPath).parent
-        val prodBinaryPath = pluginDir.resolve("bin").resolve(binaryFileName)
+        if (ide != null) {
+            val pluginPath = ide.javaClass.protectionDomain.codeSource.location.toURI()
+            val pluginDir = java.nio.file.Paths.get(pluginPath).parent
+            val prodBinaryPath = pluginDir.resolve("bin").resolve(binaryFileName)
 
-        if (java.nio.file.Files.exists(prodBinaryPath)) {
-            return prodBinaryPath.toAbsolutePath()
+            if (java.nio.file.Files.exists(prodBinaryPath)) {
+                return prodBinaryPath.toAbsolutePath()
+            }
         }
 
         // If binary not found, throw an exception
@@ -211,6 +220,8 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
      * Register IDE capabilities with the core.
      */
     private fun registerIdeCapabilities() {
+        if (ide == null) return
+
         // Send IDE information to the core
         val ideInfo = ide.getIdeInfo()
         val ideSettings = ide.getIdeSettings()
@@ -241,7 +252,7 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
                     "log" -> {
                         val level = response.optJSONObject("data")?.optString("level") ?: "info"
                         val message = response.optJSONObject("data")?.optString("message") ?: ""
-                        ide.showToast(level, message)
+                        ide?.showToast(level, message)
                     }
                     "statusUpdate" -> {
                         val status = response.optJSONObject("data")?.optString("status") ?: ""
@@ -276,6 +287,60 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
             pendingRequests.remove(messageId)
             logger.error("Error sending request: $request", e)
             throw e
+        }
+    }
+
+    /**
+     * Send a request to the core service.
+     */
+    fun request(
+        messageType: String,
+        data: JsonElement?,
+        messageId: String?,
+        callback: (Any?) -> Unit
+    ) {
+        try {
+            if (!isInitialized) {
+                initialize()
+            }
+
+            val request = JSONObject()
+            request.put("type", messageType)
+
+            if (data != null) {
+                // Convert JsonElement to JSONObject or String
+                if (data.isJsonPrimitive) {
+                    request.put("content", data.asString)
+                } else if (data.isJsonObject) {
+                    request.put("content", JSONObject(data.toString()))
+                }
+            }
+
+            // If messageId is provided, use it
+            if (messageId != null) {
+                request.put("messageId", messageId)
+            }
+
+            // Send the request asynchronously
+            Thread {
+                try {
+                    val responseStr = sendRequest(request.toString())
+                    val response = JSONObject(responseStr)
+
+                    if (response.has("content")) {
+                        val content = response.get("content")
+                        callback(content)
+                    } else {
+                        callback(null)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Error in request", e)
+                    callback(mapOf("error" to e.message))
+                }
+            }.start()
+        } catch (e: Exception) {
+            logger.error("Failed to send request", e)
+            callback(mapOf("error" to e.message))
         }
     }
 
@@ -381,6 +446,7 @@ class IdeProtocolClient(private val ide: IntelliJIDE) {
             reader = null
             writer = null
             socket = null
+            isInitialized = false
 
             logger.info("Closed connection to core service")
         } catch (e: Exception) {

@@ -54,7 +54,7 @@ export class IdeMessenger {
    */
   private getJetBrainsApi() {
     // @ts-ignore
-    return typeof window.catIde !== 'undefined' ? window.catIde : null;
+    return typeof window.postIntellijMessage !== 'undefined' ? window.postIntellijMessage : null;
   }
 
   /**

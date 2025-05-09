@@ -1,7 +1,7 @@
 package com.cat.intellij.service
 
 import com.cat.intellij.ide.IntelliJIDE
-import com.cat.intellij.protocol.IdeProtocolClient
+import com.cat.intellij.protocol.CoreMessenger
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -22,8 +22,12 @@ class CatPluginService : Disposable {
     // The IDE implementation
     private var intelliJIDE: IntelliJIDE? = null
 
-    // The protocol client for communication with the core
-    private var protocolClient: IdeProtocolClient? = null
+    // The messenger for communication with the core
+    var coreMessenger: CoreMessenger? = null
+        private set
+
+    // Callbacks to be executed when the core messenger is initialized
+    private val onInitializedCallbacks = mutableListOf<() -> Unit>()
 
     /**
      * Initialize the plugin with a project.
@@ -31,15 +35,32 @@ class CatPluginService : Disposable {
     fun initialize(project: Project) {
         currentProject = project
         intelliJIDE = IntelliJIDE(project)
-        protocolClient = IdeProtocolClient(intelliJIDE!!)
+        coreMessenger = CoreMessenger(intelliJIDE)
 
-        // Initialize the protocol client
-        protocolClient?.initialize()
+        // Initialize the core messenger
+        coreMessenger?.initialize()
 
         // Register for disposal when the project is closed
         Disposer.register(project, this)
 
+        // Execute any callbacks that were registered before initialization
+        onInitializedCallbacks.forEach { it() }
+        onInitializedCallbacks.clear()
+
         logger.info("Cat plugin service initialized for project: ${project.name}")
+    }
+
+    /**
+     * Register a callback to be executed when the core messenger is initialized.
+     */
+    fun onProtocolClientInitialized(callback: () -> Unit) {
+        if (coreMessenger != null) {
+            // If the core messenger is already initialized, execute the callback immediately
+            callback()
+        } else {
+            // Otherwise, add it to the list of callbacks to be executed when the core messenger is initialized
+            onInitializedCallbacks.add(callback)
+        }
     }
 
     /**
@@ -47,13 +68,6 @@ class CatPluginService : Disposable {
      */
     fun getIde(): IntelliJIDE? {
         return intelliJIDE
-    }
-
-    /**
-     * Get the protocol client.
-     */
-    fun getProtocolClient(): IdeProtocolClient? {
-        return protocolClient
     }
 
     /**
@@ -85,21 +99,21 @@ class CatPluginService : Disposable {
      * Ping the core service.
      */
     fun pingCore(message: String): String {
-        return protocolClient?.pingCore(message) ?: "Core service not initialized"
+        return coreMessenger?.pingCore(message) ?: "Core service not initialized"
     }
 
     /**
      * Process a message through the core service.
      */
     fun processMessage(message: String): String {
-        return protocolClient?.processMessage(message) ?: "Core service not initialized"
+        return coreMessenger?.processMessage(message) ?: "Core service not initialized"
     }
 
     /**
      * Get information about the core service.
      */
     fun getCoreInfo(): Map<String, String> {
-        return protocolClient?.getCoreInfo() ?: mapOf(
+        return coreMessenger?.getCoreInfo() ?: mapOf(
             "version" to "unknown",
             "status" to "not initialized"
         )
@@ -111,10 +125,10 @@ class CatPluginService : Disposable {
     override fun dispose() {
         try {
             // Close the connection to the core service
-            protocolClient?.close()
+            coreMessenger?.close()
 
             // Clear references
-            protocolClient = null
+            coreMessenger = null
             intelliJIDE = null
             currentProject = null
 
