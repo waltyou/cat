@@ -35,16 +35,23 @@ export class WebviewPanel {
       {
         // Enable JavaScript in the WebView
         enableScripts: true,
-        // Restrict the WebView to only load resources from the extension's directory
+        // Restrict the WebView to only load resources from the extension's directory and project root
         localResourceRoots: [
           vscode.Uri.file(path.join(extensionPath, 'gui', 'dist')),
           vscode.Uri.file(path.resolve(path.dirname(extensionPath), 'gui', 'dist')),
-          vscode.Uri.file('D:\\git\\cat\\gui\\dist')
+          vscode.Uri.file(path.resolve(extensionPath, '..')), // Project root
+          vscode.Uri.file('D:\\git\\cat\\gui\\dist'), // Direct path as fallback
         ],
         // Retain context when hidden
         retainContextWhenHidden: true,
       }
     );
+
+    // Log the allowed resource roots for debugging
+    console.log('WebviewPanel localResourceRoots:');
+    panel.webview.options.localResourceRoots?.forEach((uri, index) => {
+      console.log(`Root ${index + 1}:`, uri.toString());
+    });
 
     WebviewPanel.currentPanel = new WebviewPanel(panel, extensionPath, core);
   }
@@ -91,7 +98,7 @@ export class WebviewPanel {
           break;
 
         case 'processMessage':
-          response = await this.core.invoke('processMessage', message.content as { message: string });
+          response = this.core.invoke('processMessage', message.content as { message: string });
           break;
 
         case 'getCoreInfo':

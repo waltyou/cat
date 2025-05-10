@@ -21,7 +21,7 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
    */
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
+    _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ) {
     this._view = webviewView;
@@ -32,18 +32,23 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [
         vscode.Uri.file(path.join(this._extensionPath, 'gui', 'dist')),
         vscode.Uri.file(path.resolve(path.dirname(this._extensionPath), 'gui', 'dist')),
-        vscode.Uri.file('D:\\git\\cat\\gui\\dist')
+        vscode.Uri.file(path.resolve(this._extensionPath, '..')), // Project root
+        vscode.Uri.file('D:\\git\\cat\\gui\\dist'), // Direct path as fallback
       ]
     };
+
+    // Log the allowed resource roots for debugging
+    console.log('CatWebviewViewProvider localResourceRoots:');
+    webviewView.webview.options.localResourceRoots?.forEach((uri, index) => {
+      console.log(`Root ${index + 1}:`, uri.toString());
+    });
 
     // Set the HTML content
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(
-      (message: WebviewSingleMessage) => this._handleMessage(message),
-      undefined,
-      context.subscriptions
+      (message: WebviewSingleMessage) => this._handleMessage(message)
     );
   }
 
@@ -87,7 +92,7 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
           break;
 
         case 'processMessage':
-          response = await this._core.invoke('processMessage', message.content as { message: string });
+          response = this._core.invoke('processMessage', message.content as { message: string });
           break;
 
         case 'getCoreInfo':
@@ -147,63 +152,68 @@ export class CatWebviewViewProvider implements vscode.WebviewViewProvider {
     // Check if the bundle exists
     const bundlePath = path.join(distPath, 'bundle.js');
     const indexPath = path.join(distPath, 'index.html');
+    const cssPath = path.join(distPath, 'main.css');
 
     // Log paths for debugging
-    console.log('Extension path:', this._extensionPath);
-    console.log('Dist path:', distPath);
-    console.log('Bundle path:', bundlePath);
-    console.log('Index path:', indexPath);
-    console.log('Bundle exists:', fs.existsSync(bundlePath));
-    console.log('Index exists:', fs.existsSync(indexPath));
+    console.log('Final paths:');
+    console.log('- Extension path:', this._extensionPath);
+    console.log('- Dist path:', distPath);
+    console.log('- Bundle path:', bundlePath, 'exists:', fs.existsSync(bundlePath));
+    console.log('- Index path:', indexPath, 'exists:', fs.existsSync(indexPath));
+    console.log('- CSS path:', cssPath, 'exists:', fs.existsSync(cssPath));
 
     if (fs.existsSync(bundlePath) && fs.existsSync(indexPath)) {
-      // Use the bundled app
-      const indexHtml = fs.readFileSync(indexPath, 'utf8');
+      // Create webview URIs for resources
       const bundleUri = webview.asWebviewUri(
         vscode.Uri.file(bundlePath)
       );
 
-      console.log('Bundle URI:', bundleUri.toString());
+      // Also create URI for CSS if it exists
+      let cssUri = null;
+      if (fs.existsSync(cssPath)) {
+        cssUri = webview.asWebviewUri(
+          vscode.Uri.file(cssPath)
+        );
+      }
 
-      // Replace the script src with the correct URI
-      // Handle both script tag formats
-      let modifiedHtml = indexHtml;
+      // Create a completely new HTML document instead of modifying the existing one
+      // This ensures we have full control over the content and avoid issues with resource loading
+      const newHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https:; script-src ${webview.cspSource} 'unsafe-inline' 'unsafe-eval'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource};">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat GUI</title>
+  <script type="module" src="${bundleUri}"></script>
+  ${cssUri ? `<link rel="stylesheet" href="${cssUri}">` : ''}
+  <style>
+    body {
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #root {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>`;
 
-      // Replace module script src attribute for index.tsx
-      modifiedHtml = modifiedHtml.replace(
-        /src="\/src\/index\.tsx"/g,
-        `src="${bundleUri}"`
-      );
+      console.log('Resource URIs:');
+      console.log('- Bundle URI:', bundleUri.toString());
+      if (cssUri) {
+        console.log('- CSS URI:', cssUri.toString());
+      }
 
-      // Replace simple src attribute for bundle.js
-      modifiedHtml = modifiedHtml.replace(
-        /src="bundle\.js"/g,
-        `src="${bundleUri}"`
-      );
+      // Log the new HTML content
+      console.log('New HTML content:');
+      console.log(newHtml);
 
-      // Replace defer src attribute if present
-      modifiedHtml = modifiedHtml.replace(
-        /defer="defer" src="bundle\.js"/g,
-        `defer="defer" src="${bundleUri}"`
-      );
-
-      // Add custom styles for the sidebar view
-      modifiedHtml = modifiedHtml.replace(
-        '</head>',
-        `<style>
-          body {
-            padding: 0;
-            height: 100vh;
-            overflow: hidden;
-          }
-          #root {
-            height: 100%;
-          }
-        </style>
-        </head>`
-      );
-
-      return modifiedHtml;
+      return newHtml;
     } else {
       // Fallback to a simple HTML page
       return `

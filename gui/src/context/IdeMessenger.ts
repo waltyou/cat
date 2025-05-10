@@ -3,8 +3,6 @@ import {
   FromWebviewProtocol,
   ToWebviewProtocol,
   WebviewSingleMessage,
-  SuccessWebviewSingleMessage,
-  ErrorWebviewSingleMessage
 } from 'core/src/protocol/webview';
 
 // Declare JetBrains specific window interface
